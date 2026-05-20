@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LIFT UP — 3D Model Doğrulama</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/STLLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d1117;
+      --surface:  #161b22;
+      --border:   #30363d;
+      --accent:   #58a6ff;
+      --green:    #3fb950;
+      --warn:     #d29922;
+      --danger:   #f85149;
+      --text:     #c9d1d9;
+      --muted:    #8b949e;
+      --sw:       290px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      height: 50px; flex-shrink: 0;
+      display: flex; align-items: center; gap: 14px;
+      padding: 0 18px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    .logo { font-size: 17px; font-weight: 800; letter-spacing: 2px; color: var(--accent); }
+    .logo em { color: var(--green); font-style: normal; }
+    .header-sub { font-size: 11px; color: var(--muted); }
+    .header-badge {
+      margin-left: auto;
+      font-size: 11px; color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 20px; padding: 3px 12px;
+    }
+    .header-badge b { color: var(--green); }
+
+    /* ── Layout ── */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    aside {
+      width: var(--sw); flex-shrink: 0;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      overflow-y: auto;
+    }
+    .s { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+    .s-title {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 1.2px; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 10px;
+    }
+    label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 3px; margin-top: 9px; }
+    label:first-of-type { margin-top: 0; }
+    select {
+      width: 100%;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text);
+      padding: 6px 9px; font-size: 13px;
+    }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    .row { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+    input[type=range] { flex: 1; accent-color: var(--accent); }
+    .val { font-size: 12px; font-weight: 700; color: var(--accent); min-width: 38px; text-align: right; }
+
+    .btn {
+      width: 100%; padding: 9px; border: none; border-radius: 5px;
+      font-size: 13px; font-weight: 700; cursor: pointer; margin-top: 11px;
+      transition: opacity .15s;
+    }
+    .btn-primary { background: var(--accent); color: #0d1117; }
+    .btn-primary:hover:not(:disabled) { opacity: .85; }
+    .btn-primary:disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+    .btn-ghost {
+      background: transparent; color: var(--muted);
+      border: 1px solid var(--border);
+      font-weight: 400; font-size: 12px;
+    }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* ── View mode tabs ── */
+    .view-tabs { display: flex; gap: 4px; }
+    .vtab {
+      flex: 1; padding: 6px 0; border-radius: 5px;
+      font-size: 11px; font-weight: 600; text-align: center;
+      cursor: pointer; border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      transition: all .15s;
+    }
+    .vtab:hover { border-color: var(--accent); color: var(--accent); }
+    .vtab.active { background: var(--accent); color: #0d1117; border-color: var(--accent); }
+
+    .vtab-desc {
+      font-size: 10px; color: var(--muted);
+      margin-top: 6px; line-height: 1.5;
+    }
+
+    /* ── Stats ── */
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .stat-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 9px 10px;
+    }
+    .stat-lbl { font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: var(--muted); }
+    .stat-val { font-size: 19px; font-weight: 800; margin-top: 2px; }
+    .stat-u { font-size: 10px; font-weight: 400; color: var(--muted); }
+    .c-ok   { color: var(--green); }
+    .c-warn { color: var(--warn);  }
+    .c-bad  { color: var(--danger);}
+    .c-info { color: var(--accent); }
+
+    /* ── Simülasyon kutusu ── */
+    .sim-box { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 9px; }
+    .sim-row { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+    .sim-arrow { font-size: 10px; color: var(--muted); text-align: center; padding: 2px 0; }
+    .sim-tag { border-radius: 3px; padding: 2px 6px; font-size: 9px; font-weight: 700; }
+    .ref-tag  { background: #1a3a6b; color: var(--accent); }
+    .scan-tag { background: #1a3b1a; color: var(--green); }
+    .ai-tag   { background: #3b1a3b; color: #d49de0; }
+
+    /* ── Defect list ── */
+    .ditem {
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 11px; padding: 5px 8px;
+      background: var(--bg); border-radius: 4px;
+      margin-top: 5px;
+    }
+    .ditem .di-num { font-weight: 700; }
+    .di-type { font-size: 9px; color: var(--muted); margin-left: 5px; }
+
+    /* ── Uyum halkası + karar ── */
+    .conform-row   { display:flex; gap:12px; align-items:center; }
+    .ring-wrap     { flex-shrink:0; width:90px; height:90px; }
+    .ring-svg      { width:100%; height:100%; }
+    .verdict-col   { display:flex; flex-direction:column; gap:6px; flex:1; }
+    .tol-line      { font-size:10px; color:var(--muted); }
+
+    .risk-pill     { border-radius:4px; padding:4px 8px; font-size:11px; font-weight:700; text-align:center; }
+    .risk-low      { background:#0d2e17; color:#3fb950; border:1px solid #1a5c2e; }
+    .risk-medium   { background:#2e2004; color:#d29922; border:1px solid #5c3f08; }
+    .risk-high     { background:#2e1400; color:#ff7b00; border:1px solid #6b3000; }
+    .risk-critical { background:#2e0404; color:#f85149; border:1px solid #6b1010; }
+
+    .verdict-pill  { border-radius:4px; padding:5px 8px; font-size:12px; font-weight:800; text-align:center; }
+    .vd-accept     { background:#0d2e17; color:#3fb950; border:1px solid #1a5c2e; }
+    .vd-conditional{ background:#2e2004; color:#d29922; border:1px solid #5c3f08; }
+    .vd-reject     { background:#2e0404; color:#f85149; border:1px solid #6b1010; }
+
+    .risk-badge    { border-radius:3px; padding:3px 7px; font-size:10px; font-weight:700; white-space:nowrap; }
+
+    /* ── Legend ── */
+    .legend { padding: 10px 16px; border-bottom: 1px solid var(--border); }
+    .grad {
+      height: 10px; border-radius: 3px; margin: 5px 0;
+      background: linear-gradient(to right, #0000ff,#00ffff,#00ff00,#ffff00,#ff0000);
+    }
+    .grad-lbl { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); }
+
+    /* ── Main viewport ── */
+    main {
+      flex: 1; position: relative; overflow: hidden;
+      background: radial-gradient(ellipse at center, #111a24 0%, #080c10 100%);
+    }
+    #canvas { width: 100%; height: 100%; display: block; }
+
+    /* ── Viewport toolbar ── */
+    .vp-bar {
+      position: absolute; top: 12px; left: 12px;
+      display: flex; align-items: center; gap: 8px;
+      background: rgba(13,17,23,.82);
+      border: 1px solid var(--border);
+      border-radius: 8px; padding: 6px 12px;
+      font-size: 11px; color: var(--muted);
+      pointer-events: none;
+    }
+    .vp-mode { color: var(--accent); font-weight: 700; }
+    .vp-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* ── HUD ── */
+    .hud {
+      position: absolute; bottom: 14px; right: 14px;
+      font-size: 10px; color: var(--muted);
+      text-align: right; line-height: 1.8;
+      pointer-events: none;
+    }
+
+    /* ── Loading ── */
+    .overlay {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: rgba(8,12,16,.88);
+      z-index: 10;
+    }
+    .spin {
+      width: 44px; height: 44px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: s .8s linear infinite;
+    }
+    @keyframes s { to { transform: rotate(360deg); } }
+    .ov-label { margin-top: 14px; font-size: 13px; color: var(--muted); }
+    .ov-step  { margin-top: 5px;  font-size: 11px; color: var(--accent); }
+
+    /* ── Empty hint ── */
+    .hint {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      pointer-events: none; color: var(--muted);
+    }
+    .hint-icon { font-size: 48px; opacity: .3; }
+    .hint p    { font-size: 13px; margin-top: 10px; }
+    .hint small { font-size: 11px; opacity: .7; margin-top: 4px; }
+
+    /* ── Toast ── */
+    .toast {
+      position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 9px 18px;
+      font-size: 12px; z-index: 20; pointer-events: none;
+      white-space: nowrap;
+    }
+    .toast-ok  { border-color: var(--green);  color: var(--green); }
+    .toast-err { border-color: var(--danger); color: var(--danger); }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Header -->
+  <header>
+    <div class="logo">LIFT<em>UP</em></div>
+    <div class="header-sub">Yapay Zeka Destekli 3D Model Doğrulama</div>
+    <div class="header-badge">AYBÜ EEE &nbsp;|&nbsp; <b>TUSAŞ</b></div>
+  </header>
+
+  <div class="body">
+    <!-- ── Sidebar ── -->
+    <aside>
+
+      <!-- Görüntüleme Modu -->
+      <div class="s">
+        <div class="s-title">Görüntüleme Modu</div>
+        <div class="view-tabs">
+          <button class="vtab" :class="{active: viewMode==='ref'}"  @click="setMode('ref')">Referans</button>
+          <button class="vtab" :class="{active: viewMode==='scan'}" @click="setMode('scan')">Tarama</button>
+          <button class="vtab" :class="{active: viewMode==='both'}" @click="setMode('both')">Karşılaştır</button>
+        </div>
+        <div class="vtab-desc">
+          <template v-if="viewMode==='ref'">
+            <b style="color:var(--accent)">Referans CAD modeli</b> — kusursuz hedef parça.
+          </template>
+          <template v-else-if="viewMode==='scan'">
+            <b style="color:var(--accent)">Tarama nokta bulutu</b> — sapma ısı haritası.
+            <span style="color:var(--danger)">■</span> kırmızı = tolerans dışı.
+          </template>
+          <template v-else>
+            <b style="color:var(--accent)">İkisi birlikte</b> — şeffaf referans +
+            renkli tarama. Fark açıkça görülür.
+          </template>
+        </div>
+      </div>
+
+      <!-- Model seçimi -->
+      <div class="s">
+        <div class="s-title">Referans STL</div>
+        <select v-model="form.model" @change="onModelChange" :disabled="loading">
+          <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+        </select>
+      </div>
+
+      <!-- Simülasyon açıklaması -->
+      <div class="s">
+        <div class="s-title">Simülasyon Hakkında</div>
+        <div class="sim-box">
+          <div class="sim-row">
+            <span class="sim-tag ref-tag">Referans</span>
+            <span>{{ form.model }} — sağlam CAD</span>
+          </div>
+          <div class="sim-arrow">↓ yüzeyden nokta örnekle</div>
+          <div class="sim-row">
+            <span class="sim-tag scan-tag">Tarama</span>
+            <span>gürültü + {{ form.defect_count }} yapay hata</span>
+          </div>
+          <div class="sim-arrow">↓ ICP hizala + sapma hesapla</div>
+          <div class="sim-row">
+            <span class="sim-tag ai-tag">AI</span>
+            <span>anomali tespiti (IsolationForest)</span>
+          </div>
+        </div>
+        <div style="margin-top:8px; font-size:10px; color:var(--muted); line-height:1.6">
+          Hata tipleri sırayla enjekte edilir:<br>
+          🔺 <b>Çıkıntı</b> — malzeme fazlası<br>
+          🔻 <b>Çukur</b> — malzeme eksiği<br>
+          ⬜ <b>Eksik bölge</b> — hiç nokta yok
+        </div>
+      </div>
+
+      <!-- Parametreler -->
+      <div class="s">
+        <div class="s-title">Tarama Parametreleri</div>
+
+        <label>Nokta sayısı — {{ form.n_points.toLocaleString() }}</label>
+        <div class="row">
+          <input type="range" v-model.number="form.n_points" min="2000" max="20000" step="500" :disabled="loading"/>
+          <span class="val">{{ form.n_points }}</span>
+        </div>
+
+        <label>Sensör gürültüsü σ — {{ form.noise_std.toFixed(2) }} mm</label>
+        <div class="row">
+          <input type="range" v-model.number="form.noise_std" min="0.05" max="2.0" step="0.05" :disabled="loading"/>
+          <span class="val">{{ form.noise_std.toFixed(2) }}</span>
+        </div>
+
+        <label>Enjekte edilecek hata sayısı — {{ form.defect_count }}</label>
+        <div class="row">
+          <input type="range" v-model.number="form.defect_count" min="0" max="8" step="1" :disabled="loading"/>
+          <span class="val">{{ form.defect_count }}</span>
+        </div>
+
+        <button class="btn btn-primary" @click="runAnalysis" :disabled="loading">
+          {{ loading ? '⏳ Çalışıyor...' : '▶  Analizi Başlat' }}
+        </button>
+        <button class="btn btn-ghost" @click="resetScene" :disabled="loading">↺ Temizle</button>
+      </div>
+
+      <!-- Renk skalası -->
+      <div class="legend">
+        <div class="s-title">Sapma Renk Skalası</div>
+        <div class="grad"></div>
+        <div class="grad-lbl">
+          <span>0 mm</span><span>Normal</span><span>&gt; {{ devMax }} mm</span>
+        </div>
+      </div>
+
+      <!-- Uyum + Karar -->
+      <div class="s" v-if="stats">
+        <div class="s-title">Kalite Değerlendirmesi</div>
+        <div class="conform-row">
+          <!-- SVG uyum halkası -->
+          <div class="ring-wrap">
+            <svg viewBox="0 0 100 100" class="ring-svg">
+              <circle cx="50" cy="50" r="38" fill="none" stroke="#1f2937" stroke-width="9"/>
+              <circle cx="50" cy="50" r="38" fill="none"
+                :stroke="conformColor" stroke-width="9" stroke-linecap="round"
+                :stroke-dasharray="ringC" :stroke-dashoffset="ringOffset"
+                transform="rotate(-90 50 50)" style="transition:stroke-dashoffset .7s ease"/>
+              <text x="50" y="46" text-anchor="middle" fill="#c9d1d9" font-size="17" font-weight="800" font-family="Segoe UI,sans-serif">{{ stats.conformance.toFixed(1) }}%</text>
+              <text x="50" y="60" text-anchor="middle" fill="#8b949e" font-size="8" font-family="Segoe UI,sans-serif">uyumlu</text>
+            </svg>
+          </div>
+          <!-- Sağ: tolerans, risk, karar -->
+          <div class="verdict-col">
+            <div class="tol-line">Tolerans ±{{ stats.tolerance_mm }} mm</div>
+            <div class="risk-pill" :class="'risk-' + stats.overall_risk">
+              {{ riskLabel(stats.overall_risk) }} Risk
+            </div>
+            <div class="verdict-pill" :class="'vd-' + stats.verdict">
+              {{ verdictIcon(stats.verdict) }} {{ verdictText(stats.verdict) }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sayısal metrikler -->
+      <div class="s" v-if="stats">
+        <div class="s-title">Metrikler</div>
+        <div class="stat-grid">
+          <div class="stat-card">
+            <div class="stat-lbl">RMS Sapma</div>
+            <div class="stat-val" :class="rmsC">{{ stats.rms }}<span class="stat-u"> mm</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl">Maks Sapma</div>
+            <div class="stat-val c-bad">{{ stats.max_deviation }}<span class="stat-u"> mm</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl">Anomali</div>
+            <div class="stat-val" :class="anomC">{{ stats.anomaly_count }}<span class="stat-u"> pt</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl">ICP RMSE</div>
+            <div class="stat-val c-info">{{ stats.icp_rmse }}<span class="stat-u"> mm</span></div>
+          </div>
+        </div>
+
+        <div v-if="defects.length" style="margin-top:10px">
+          <div class="s-title" style="margin-bottom:6px">Hata Bölgeleri</div>
+          <div class="ditem" v-for="(d,i) in defects" :key="i" :style="defectStyle(d.type)">
+            <div>
+              <div><b>{{ defectIcon(d.type) }} Bölge {{ i+1 }}</b>
+                <span class="di-type">{{ defectLabel(d.type) }}</span>
+              </div>
+              <div style="font-size:10px;color:var(--muted);margin-top:2px">
+                r={{ d.radius.toFixed(1) }}mm
+                <template v-if="d.magnitude"> &nbsp;Δ={{ d.magnitude.toFixed(1) }}mm</template>
+              </div>
+            </div>
+            <span class="risk-badge" :class="'risk-' + d.risk.level">{{ d.risk.label }}</span>
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── Viewport ── -->
+    <main>
+      <canvas id="canvas"></canvas>
+
+      <!-- Viewport üst çubuğu -->
+      <div class="vp-bar" v-if="hasData || refLoaded">
+        <span class="vp-dot" :style="modeColor"></span>
+        <span class="vp-mode">{{ modeLabel }}</span>
+        <span>|</span>
+        <span>{{ form.model }}</span>
+        <template v-if="stats">
+          <span>|</span>
+          <span>{{ stats.total_points.toLocaleString() }} nokta</span>
+        </template>
+      </div>
+
+      <!-- Loading -->
+      <div class="overlay" v-if="loading">
+        <div class="spin"></div>
+        <div class="ov-label">Pipeline çalışıyor...</div>
+        <div class="ov-step">{{ step }}</div>
+      </div>
+
+      <!-- Boş durum -->
+      <div class="hint" v-if="!hasData && !loading && !refLoaded">
+        <div class="hint-icon">⬡</div>
+        <p>3D görselleştirme burada açılacak</p>
+        <small>Sol panelden model seçip "Analizi Başlat"a tıklayın</small>
+      </div>
+
+      <!-- HUD -->
+      <div class="hud" v-if="hasData || refLoaded">
+        <div>Sol tık: döndür</div>
+        <div>Sağ tık / kaydır: pan</div>
+        <div>Scroll: zoom</div>
+      </div>
+
+      <!-- Toast -->
+      <div class="toast" :class="toast.cls" v-if="toast.show">{{ toast.msg }}</div>
+    </main>
+
+  </div>
+</div>
+
+<script>
+const { createApp, ref, reactive, computed, onMounted } = Vue;
+
+// ─── Three.js state ────────────────────────────────────────────────────────────
+let renderer, labelRenderer, scene, camera, controls;
+let refMesh      = null;   // Three.Mesh   – CAD referansı
+let scanPts      = null;   // Three.Points – tarama nokta bulutu (heatmap)
+let anomPts      = null;   // Three.Points – anomali vurgusu
+let defectGroup  = null;   // Three.Group  – hata bölgesi marker'ları + etiketler
+
+// Hata tipi renkleri (hex sayı / css string)
+const DEFECT_HEX = { bump: 0xff7b00, hole: 0xbb44ff, missing: 0x99ccff };
+const DEFECT_CSS = { bump: '#ff7b00', hole: '#bb44ff', missing: '#99ccff' };
+const DEFECT_ICON  = { bump: '▲', hole: '▼', missing: '○' };
+const DEFECT_LABEL = { bump: 'Çıkıntı', hole: 'Çukur', missing: 'Eksik Bölge' };
+
+// Nokta bulutu renklendir: heatmap + defekt tipi override
+const DEFECT_PT_COLOR = {
+  bump:    [1.0, 0.48, 0.0],
+  hole:    [0.73, 0.27, 1.0],
+  missing: null,   // missing nokta yoktur
+};
+
+function initThree() {
+  const canvas = document.getElementById('canvas');
+  const wrap   = canvas.parentElement;
+
+  // WebGL renderer
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  renderer.setClearColor(0x080c10);
+
+  // CSS2D label renderer (HTML etiketler için)
+  labelRenderer = new THREE.CSS2DRenderer();
+  labelRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+  labelRenderer.domElement.style.position = 'absolute';
+  labelRenderer.domElement.style.top = '0';
+  labelRenderer.domElement.style.pointerEvents = 'none';
+  wrap.appendChild(labelRenderer.domElement);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.01, 10000);
+  camera.position.set(0, 0, 300);
+
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.07;
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+  const d1 = new THREE.DirectionalLight(0xffffff, 0.8);
+  d1.position.set(100, 200, 150); scene.add(d1);
+  const d2 = new THREE.DirectionalLight(0x88aaff, 0.3);
+  d2.position.set(-100, -50, -100); scene.add(d2);
+
+  window.addEventListener('resize', () => {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    renderer.setSize(w, h);
+    labelRenderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  });
+
+  (function loop() {
+    requestAnimationFrame(loop);
+    controls.update();
+    renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
+  })();
+}
+
+// Tüm mesh/pointlara bakarak kamerayı otomatik çerçevele
+function frameAll() {
+  const box = new THREE.Box3();
+  scene.traverse(o => { if ((o.isMesh || o.isPoints) && o.visible) box.expandByObject(o); });
+  if (box.isEmpty()) {
+    scene.traverse(o => { if (o.isMesh || o.isPoints) box.expandByObject(o); });
+  }
+  if (box.isEmpty()) return;
+
+  const center = new THREE.Vector3();
+  const size   = new THREE.Vector3();
+  box.getCenter(center);
+  box.getSize(size);
+  const d = Math.max(size.x, size.y, size.z);
+
+  camera.near = d * 0.001;
+  camera.far  = d * 50;
+  camera.updateProjectionMatrix();
+  camera.position.set(center.x + d * 1.3, center.y + d * 0.7, center.z + d * 1.3);
+  controls.target.copy(center);
+  controls.update();
+}
+
+// Referans STL'i yükle — koordinatları KAYDIRMA (center() YOK)
+function loadRefMesh(modelName, opacity, visible) {
+  if (refMesh) { scene.remove(refMesh); refMesh.geometry.dispose(); refMesh = null; }
+
+  const loader = new THREE.STLLoader();
+  loader.load(
+    `/models/${modelName}`,
+    geo => {
+      geo.computeVertexNormals();
+      // geometry.center() KULLANILMIYOR — orijinal koordinatlarda kalması gerekiyor
+      const mat = new THREE.MeshPhongMaterial({
+        color: 0x4d9de0,
+        specular: 0x2255aa,
+        shininess: 60,
+        transparent: opacity < 1.0,
+        opacity: opacity,
+        side: THREE.DoubleSide,
+        depthWrite: opacity >= 1.0,
+      });
+      refMesh = new THREE.Mesh(geo, mat);
+      refMesh.visible = visible;
+      scene.add(refMesh);
+      frameAll();
+      return refMesh;
+    },
+    undefined,
+    err => console.warn('STL yüklenemedi:', err)
+  );
+}
+
+// Referans mesh görünürlük/opaklık güncelle (mevcut geometriyi koru)
+function applyModeToRef(mode) {
+  if (!refMesh) return;
+  if (mode === 'ref') {
+    refMesh.visible = true;
+    refMesh.material.transparent = false;
+    refMesh.material.opacity = 1.0;
+    refMesh.material.depthWrite = true;
+  } else if (mode === 'both') {
+    refMesh.visible = true;
+    refMesh.material.transparent = true;
+    refMesh.material.opacity = 0.18;
+    refMesh.material.depthWrite = false;
+  } else {
+    refMesh.visible = false;
+  }
+  refMesh.material.needsUpdate = true;
+}
+
+function applyModeToScan(mode) {
+  const show = (mode === 'scan' || mode === 'both');
+  if (scanPts)     scanPts.visible     = show;
+  if (anomPts)     anomPts.visible     = show;
+  if (defectGroup) defectGroup.visible = show;
+}
+
+// Nokta bulutu: heatmap rengi, ama defekt bölgesindeki noktalar tipine göre renklendirilir
+function buildScanCloud(points, colors, pointDefectTypes) {
+  const n   = points.length;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    pos[i*3]   = points[i][0]; pos[i*3+1] = points[i][1]; pos[i*3+2] = points[i][2];
+    const dt = pointDefectTypes ? pointDefectTypes[i] : null;
+    const override = dt ? DEFECT_PT_COLOR[dt] : null;
+    if (override) {
+      col[i*3] = override[0]; col[i*3+1] = override[1]; col[i*3+2] = override[2];
+    } else {
+      col[i*3] = colors[i][0]; col[i*3+1] = colors[i][1]; col[i*3+2] = colors[i][2];
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  return new THREE.Points(geo, new THREE.PointsMaterial({ size: 0.7, vertexColors: true, sizeAttenuation: true }));
+}
+
+// Anomali noktaları (parlak, büyük)
+function buildAnomCloud(points, anomalies, pointDefectTypes) {
+  const idxs = anomalies.map((a, i) => a ? i : -1).filter(i => i >= 0);
+  if (!idxs.length) return null;
+  const pos = new Float32Array(idxs.length * 3);
+  const col = new Float32Array(idxs.length * 3);
+  idxs.forEach((si, j) => {
+    pos[j*3] = points[si][0]; pos[j*3+1] = points[si][1]; pos[j*3+2] = points[si][2];
+    const dt = pointDefectTypes ? pointDefectTypes[si] : null;
+    const c  = dt ? DEFECT_PT_COLOR[dt] : [1, 0.1, 0.2];
+    const sc = c || [1, 0.1, 0.2];
+    col[j*3] = Math.min(sc[0] * 1.3, 1); col[j*3+1] = Math.min(sc[1] * 1.3, 1); col[j*3+2] = Math.min(sc[2] * 1.3, 1);
+  });
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color',    new THREE.BufferAttribute(col, 3));
+  return new THREE.Points(geo, new THREE.PointsMaterial({ size: 2.4, vertexColors: true, sizeAttenuation: true }));
+}
+
+// 3D marker + CSS2D etiket — her defekt bölgesi için
+function buildDefectMarkers(defectRegions) {
+  const group = new THREE.Group();
+
+  defectRegions.forEach((d, idx) => {
+    const center = new THREE.Vector3(...d.center);
+    const color  = DEFECT_HEX[d.type] || 0xff0000;
+    const css    = DEFECT_CSS[d.type] || '#ff0000';
+
+    if (d.type === 'missing') {
+      // Halka: eksik malzeme bölgesini çerçevele
+      const torus = new THREE.Mesh(
+        new THREE.TorusGeometry(d.radius * 0.85, 0.5, 8, 48),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85 })
+      );
+      torus.position.copy(center);
+      group.add(torus);
+
+      // İkinci ince halka (daha büyük)
+      const torus2 = new THREE.Mesh(
+        new THREE.TorusGeometry(d.radius, 0.2, 8, 48),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35 })
+      );
+      torus2.position.copy(center);
+      group.add(torus2);
+
+    } else {
+      // Merkez küre
+      const sphere = new THREE.Mesh(
+        new THREE.SphereGeometry(d.radius * 0.12, 12, 12),
+        new THREE.MeshPhongMaterial({ color, emissive: color, emissiveIntensity: 0.5 })
+      );
+      sphere.position.copy(center);
+      group.add(sphere);
+
+      // Etki alanı tel küre
+      const wire = new THREE.Mesh(
+        new THREE.SphereGeometry(d.radius, 14, 14),
+        new THREE.MeshBasicMaterial({ color, wireframe: true, transparent: true, opacity: 0.20 })
+      );
+      wire.position.copy(center);
+      group.add(wire);
+    }
+
+    // CSS2D etiketi — viewport'a HTML olarak çizilir
+    const div = document.createElement('div');
+    div.style.cssText = [
+      'background:rgba(13,17,23,0.9)',
+      `border:1.5px solid ${css}`,
+      'border-radius:5px',
+      'padding:4px 9px',
+      'font-size:11px',
+      `color:${css}`,
+      "font-family:'Segoe UI',sans-serif",
+      'white-space:nowrap',
+      'pointer-events:none',
+      'line-height:1.4',
+    ].join(';');
+
+    const sign = d.type === 'hole' ? '−' : d.type === 'bump' ? '+' : '';
+    const mag  = d.magnitude > 0 ? ` ${sign}${d.magnitude.toFixed(1)}mm` : '';
+
+    const RISK_CSS_COLOR = { low:'#3fb950', medium:'#d29922', high:'#ff7b00', critical:'#f85149' };
+    const RISK_TR = { low:'Düşük', medium:'Orta', high:'Yüksek', critical:'Kritik' };
+    const risk    = d.risk || { level: 'high', label: 'Yüksek' };
+    const rc      = RISK_CSS_COLOR[risk.level] || '#ff7b00';
+
+    div.innerHTML = `
+      <b>${DEFECT_ICON[d.type]}&nbsp;${DEFECT_LABEL[d.type]}</b>${mag}
+      <span style="
+        background:${rc}22; border:1px solid ${rc};
+        border-radius:3px; padding:1px 5px; margin-left:5px;
+        font-size:9px; color:${rc}; font-weight:700;
+      ">${RISK_TR[risk.level] || risk.label} Risk</span>
+      <br>
+      <span style="font-size:9px;opacity:.7">Bölge ${idx + 1} &nbsp; r=${d.radius.toFixed(1)}mm</span>
+    `;
+
+    const label = new THREE.CSS2DObject(div);
+    label.position.copy(center);
+    label.position.y += d.radius + 2;   // etiket biraz yukarıda
+    group.add(label);
+  });
+
+  return group;
+}
+
+// ─── Vue app ───────────────────────────────────────────────────────────────────
+createApp({
+  setup() {
+    const models    = ref([]);
+    const form      = reactive({ model: 'sedefe1.stl', n_points: 8000, noise_std: 0.3, defect_count: 3 });
+    const viewMode  = ref('both');   // 'ref' | 'scan' | 'both'
+    const loading   = ref(false);
+    const step      = ref('');
+    const stats     = ref(null);
+    const defects   = ref([]);
+    const hasData   = ref(false);
+    const refLoaded = ref(false);
+    const toast     = reactive({ show: false, msg: '', cls: '' });
+
+    const devMax    = computed(() => stats.value ? stats.value.max_deviation.toFixed(2) : '—');
+
+    // Uyum halkası
+    const ringC      = 238.76;  // 2π × 38
+    const ringOffset = computed(() =>
+      stats.value ? ringC * (1 - stats.value.conformance / 100) : ringC
+    );
+    const conformColor = computed(() => {
+      if (!stats.value) return '#30363d';
+      const c = stats.value.conformance;
+      if (c >= 95) return '#3fb950';
+      if (c >= 85) return '#d29922';
+      if (c >= 70) return '#ff7b00';
+      return '#f85149';
+    });
+
+    const rmsC      = computed(() => {
+      if (!stats.value) return '';
+      return stats.value.rms < 0.5 ? 'c-ok' : stats.value.rms < 1.0 ? 'c-warn' : 'c-bad';
+    });
+    const anomC     = computed(() => {
+      if (!stats.value) return '';
+      return stats.value.anomaly_count === 0 ? 'c-ok'
+           : stats.value.anomaly_count  < 80 ? 'c-warn' : 'c-bad';
+    });
+    const modeLabel = computed(() => ({
+      ref:  '📐 Referans CAD Modeli',
+      scan: '☁ Tarama Nokta Bulutu',
+      both: '⊕ Karşılaştırma (Birlikte)',
+    }[viewMode.value]));
+    const modeColor = computed(() => {
+      const c = { ref: '#58a6ff', scan: '#3fb950', both: '#d29922' }[viewMode.value];
+      return { background: c };
+    });
+
+    function showToast(msg, ok = true, ms = 3500) {
+      toast.msg  = msg; toast.cls = ok ? 'toast-ok' : 'toast-err'; toast.show = true;
+      setTimeout(() => { toast.show = false; }, ms);
+    }
+
+    onMounted(async () => {
+      initThree();
+      try {
+        const r = await fetch('/api/models');
+        const d = await r.json();
+        models.value = d.models;
+        if (d.models.length) {
+          form.model = d.models[0];
+          loadRefMesh(form.model, 1.0, viewMode.value === 'ref' || viewMode.value === 'both');
+          refLoaded.value = true;
+        }
+      } catch { showToast('API bağlantısı kurulamadı', false); }
+    });
+
+    function setMode(m) {
+      viewMode.value = m;
+      applyModeToRef(m);
+      applyModeToScan(m);
+      frameAll();
+    }
+
+    function onModelChange() {
+      hasData.value  = false;
+      refLoaded.value = false;
+      stats.value    = null;
+      defects.value  = [];
+      if (scanPts) { scene.remove(scanPts); scanPts.geometry.dispose(); scanPts = null; }
+      if (anomPts) { scene.remove(anomPts); anomPts.geometry.dispose(); anomPts = null; }
+      const showRef = (viewMode.value === 'ref' || viewMode.value === 'both');
+      loadRefMesh(form.model, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
+      refLoaded.value = true;
+    }
+
+    async function runAnalysis() {
+      loading.value = true;
+      step.value    = 'Referans modeli yükleniyor...';
+
+      // Referans mesh'i mevcut moda göre yükle (önceden yoksa)
+      if (!refMesh) {
+        const showRef = (viewMode.value !== 'scan');
+        loadRefMesh(form.model, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
+      }
+
+      try {
+        step.value = 'Simüle tarama + ICP hizalaması...';
+        const res  = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: form.model,
+            n_points: form.n_points,
+            noise_std: form.noise_std,
+            defect_count: form.defect_count,
+          }),
+        });
+        if (!res.ok) {
+          const e = await res.json();
+          throw new Error(e.detail || 'Sunucu hatası');
+        }
+
+        step.value  = 'Anomali tespiti + görselleştirme...';
+        const data  = await res.json();
+
+        // Eski nesneleri temizle
+        if (scanPts)     { scene.remove(scanPts);    scanPts.geometry.dispose(); }
+        if (anomPts)     { scene.remove(anomPts);    anomPts.geometry.dispose(); }
+        if (defectGroup) { scene.remove(defectGroup); }
+
+        scanPts    = buildScanCloud(data.points, data.colors, data.point_defect_types);
+        anomPts    = buildAnomCloud(data.points, data.anomalies, data.point_defect_types);
+        defectGroup = buildDefectMarkers(data.defect_regions);
+
+        // Moda göre görünürlük
+        applyModeToRef(viewMode.value);
+        scanPts.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
+        scene.add(scanPts);
+        if (anomPts) {
+          anomPts.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
+          scene.add(anomPts);
+        }
+        defectGroup.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
+        scene.add(defectGroup);
+
+        stats.value   = data.stats;
+        defects.value = data.defect_regions;
+        hasData.value = true;
+
+        frameAll();
+        showToast(`Tamamlandı — ${data.stats.anomaly_count} anomali, RMS ${data.stats.rms} mm`);
+
+      } catch (err) {
+        showToast('Hata: ' + err.message, false, 6000);
+        console.error(err);
+      } finally {
+        loading.value = false;
+        step.value    = '';
+      }
+    }
+
+    function resetScene() {
+      if (scanPts)     { scene.remove(scanPts);     scanPts.geometry.dispose();  scanPts = null; }
+      if (anomPts)     { scene.remove(anomPts);     anomPts.geometry.dispose();  anomPts = null; }
+      if (defectGroup) { scene.remove(defectGroup); defectGroup = null; }
+      stats.value   = null;
+      defects.value = [];
+      hasData.value = false;
+      applyModeToRef(viewMode.value);
+    }
+
+    function riskLabel(level) {
+      return { low:'Düşük', medium:'Orta', high:'Yüksek', critical:'Kritik' }[level] || level;
+    }
+    function verdictIcon(v) {
+      return { accept:'✓', conditional:'⚠', reject:'✕' }[v] || '';
+    }
+    function verdictText(v) {
+      return { accept:'KABUL', conditional:'KOŞULLU', reject:'RED' }[v] || v;
+    }
+
+    function defectIcon(type) {
+      return { bump: '🔺', hole: '🔻', missing: '⬜' }[type] || '●';
+    }
+    function defectLabel(type) {
+      return { bump: 'çıkıntı', hole: 'çukur', missing: 'eksik bölge' }[type] || type;
+    }
+    function defectStyle(type) {
+      const colors = { bump: '#d29922', hole: '#f85149', missing: '#8b949e' };
+      return { borderLeft: `3px solid ${colors[type] || '#f85149'}` };
+    }
+
+    return {
+      models, form, viewMode, loading, step,
+      stats, defects, hasData, refLoaded, toast,
+      devMax, rmsC, anomC, modeLabel, modeColor,
+      setMode, onModelChange, runAnalysis, resetScene,
+      defectIcon, defectLabel, defectStyle,
+      riskLabel, verdictIcon, verdictText,
+      ringC, ringOffset, conformColor,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
