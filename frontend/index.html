@@ -62,11 +62,17 @@
     /* ── Sidebar ── */
     aside {
       width: var(--sw); flex-shrink: 0;
+      height: calc(100vh - 50px);
       background: var(--surface);
       border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      overflow-y: auto;
+      overflow-y: scroll;
+      scrollbar-width: thin;
+      scrollbar-color: #444c56 var(--bg);
     }
+    aside::-webkit-scrollbar { width: 6px; }
+    aside::-webkit-scrollbar-track { background: var(--bg); }
+    aside::-webkit-scrollbar-thumb { background: #444c56; border-radius: 3px; }
+    aside::-webkit-scrollbar-thumb:hover { background: var(--muted); }
     .s { padding: 14px 16px; border-bottom: 1px solid var(--border); }
     .s-title {
       font-size: 10px; font-weight: 700;
@@ -250,6 +256,235 @@
     }
     .toast-ok  { border-color: var(--green);  color: var(--green); }
     .toast-err { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Geçmiş paneli ── */
+    .history-toggle {
+      display: flex; align-items: center; justify-content: space-between;
+      cursor: pointer; user-select: none;
+    }
+    .history-toggle:hover .s-title { color: var(--accent); }
+    .history-chevron { font-size: 10px; color: var(--muted); transition: transform .2s; }
+    .history-chevron.open { transform: rotate(180deg); }
+
+    .hist-item {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 6px; padding: 8px 10px; margin-top: 6px;
+      cursor: pointer; transition: border-color .15s;
+    }
+    .hist-item:hover { border-color: var(--accent); }
+    .hist-item:first-child { margin-top: 0; }
+    .hist-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+    .hist-model { font-size: 11px; font-weight: 700; color: var(--text); }
+    .hist-time { font-size: 9px; color: var(--muted); margin-top: 2px; }
+    .hist-meta { display: flex; align-items: center; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+    .hist-conf { font-size: 10px; font-weight: 700; }
+    .hist-del {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 13px; padding: 2px 4px;
+      border-radius: 3px; line-height: 1; flex-shrink: 0;
+    }
+    .hist-del:hover { color: var(--danger); background: rgba(248,81,73,.12); }
+    .hist-empty { font-size: 11px; color: var(--muted); text-align: center; padding: 10px 0; }
+    .hist-clear {
+      width: 100%; margin-top: 8px; padding: 5px; border-radius: 4px;
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); font-size: 10px; cursor: pointer;
+    }
+    .hist-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── PDF butonu ── */
+    .btn-pdf {
+      width: 100%; padding: 9px; border-radius: 5px; margin-top: 6px;
+      background: #0d2e17; border: 1px solid var(--green);
+      color: var(--green); font-size: 13px; font-weight: 700;
+      cursor: pointer; transition: opacity .15s;
+    }
+    .btn-pdf:hover { opacity: .80; }
+    .hist-pdf {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 12px; padding: 2px 5px;
+      border-radius: 3px; line-height: 1; flex-shrink: 0;
+    }
+    .hist-pdf:hover { color: var(--green); background: rgba(63,185,80,.12); }
+
+    /* ── Karşılaştırma seçim butonu ── */
+    .hist-cmp {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 11px; padding: 2px 5px;
+      border-radius: 3px; line-height: 1; flex-shrink: 0;
+    }
+    .hist-cmp:hover  { color: var(--accent); background: rgba(88,166,255,.12); }
+    .hist-cmp.active { color: var(--accent); background: rgba(88,166,255,.20); }
+
+    .cmp-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      background: rgba(88,166,255,.08); border: 1px solid var(--accent);
+      border-radius: 6px; padding: 7px 10px; margin-top: 8px; gap: 8px;
+    }
+    .cmp-bar span { font-size: 10px; color: var(--accent); }
+    .btn-cmp {
+      padding: 5px 12px; border-radius: 4px; border: none;
+      background: var(--accent); color: #0d1117;
+      font-size: 11px; font-weight: 700; cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-cmp:hover { opacity: .85; }
+    .btn-cmp-clear {
+      padding: 4px 8px; border-radius: 4px;
+      border: 1px solid var(--border); background: none;
+      color: var(--muted); font-size: 10px; cursor: pointer;
+    }
+    .btn-cmp-clear:hover { border-color: var(--danger); color: var(--danger); }
+
+    /* ── Karşılaştırma Modalı ── */
+    .cmp-modal {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,.75);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .cmp-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; width: 100%; max-width: 860px;
+      max-height: 90vh; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: #444c56 var(--bg);
+    }
+    .cmp-box::-webkit-scrollbar { width: 5px; }
+    .cmp-box::-webkit-scrollbar-thumb { background: #444c56; border-radius: 3px; }
+    .cmp-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+    }
+    .cmp-head h2 { font-size: 14px; color: var(--text); margin: 0; }
+    .cmp-close {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); font-size: 18px; line-height: 1; padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .cmp-close:hover { color: var(--danger); }
+
+    .cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+    .cmp-col {
+      padding: 16px 18px;
+      border-right: 1px solid var(--border);
+    }
+    .cmp-col:last-child { border-right: none; }
+    .cmp-col-head {
+      font-size: 11px; font-weight: 700; color: var(--muted);
+      letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px;
+    }
+    .cmp-model { font-size: 13px; font-weight: 700; color: var(--text); }
+    .cmp-time  { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    .cmp-winner-badge {
+      display: inline-block; margin-top: 8px;
+      padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 700;
+    }
+    .cmp-winner-a { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
+    .cmp-winner-b { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid var(--green); }
+    .cmp-tie      { background: rgba(139,148,158,.1); color: var(--muted); border: 1px solid var(--border); }
+
+    .cmp-metrics { margin-top: 14px; }
+    .cmp-metric-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 0; border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .cmp-metric-row:last-child { border-bottom: none; }
+    .cmp-metric-lbl { color: var(--muted); min-width: 110px; }
+    .cmp-metric-val { font-weight: 700; font-size: 12px; }
+    .cmp-delta { font-size: 10px; margin-left: 6px; }
+    .cmp-win  { color: var(--green); }
+    .cmp-lose { color: var(--danger); }
+    .cmp-tie2 { color: var(--muted); }
+
+    .cmp-score-row {
+      display: grid; grid-template-columns: 1fr 1fr;
+      border-top: 1px solid var(--border);
+      padding: 14px 18px; gap: 10px;
+    }
+    .cmp-score-card {
+      background: var(--bg); border-radius: 8px; padding: 12px;
+      text-align: center; border: 1px solid var(--border);
+    }
+    .cmp-score-card.winner { border-color: var(--green); background: rgba(63,185,80,.06); }
+    .cmp-score-num { font-size: 28px; font-weight: 800; }
+    .cmp-score-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ── İstatistik Modalı ── */
+    .stats-btn {
+      margin-left: 10px; padding: 4px 13px;
+      border-radius: 14px; border: 1px solid var(--border);
+      background: transparent; color: var(--muted);
+      font-size: 11px; cursor: pointer; transition: all .15s;
+    }
+    .stats-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+    .stats-modal {
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,.75);
+      display: flex; align-items: center; justify-content: center;
+      padding: 20px;
+    }
+    .stats-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; width: 100%; max-width: 780px;
+      max-height: 90vh; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: #444c56 var(--bg);
+    }
+    .stats-box::-webkit-scrollbar { width: 5px; }
+    .stats-box::-webkit-scrollbar-thumb { background: #444c56; border-radius: 3px; }
+
+    .stats-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--border);
+    }
+    .stats-head h2 { font-size: 14px; color: var(--text); margin: 0; }
+
+    .stats-body { padding: 16px 18px; }
+
+    .stats-cards {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
+      margin-bottom: 18px;
+    }
+    .stats-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 12px 14px;
+    }
+    .stats-card-lbl { font-size: 9px; text-transform: uppercase;
+                      letter-spacing: .8px; color: var(--muted); }
+    .stats-card-val { font-size: 22px; font-weight: 800; margin-top: 4px; }
+    .stats-card-sub { font-size: 9px; color: var(--muted); margin-top: 2px; }
+
+    .stats-section { margin-bottom: 18px; }
+    .stats-section-title {
+      font-size: 9px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--muted); margin-bottom: 10px;
+    }
+
+    /* Dağılım barları */
+    .dist-row { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; }
+    .dist-lbl  { font-size: 10px; color: var(--text); min-width: 80px; }
+    .dist-bar-wrap { flex: 1; background: var(--bg); border-radius: 3px; height: 8px; overflow: hidden; }
+    .dist-bar  { height: 100%; border-radius: 3px; transition: width .5s ease; }
+    .dist-cnt  { font-size: 10px; color: var(--muted); min-width: 28px; text-align: right; }
+
+    /* En iyi / kötü */
+    .bw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .bw-card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 7px; padding: 10px 13px;
+    }
+    .bw-label { font-size: 9px; text-transform: uppercase; letter-spacing: .8px;
+                color: var(--muted); margin-bottom: 6px; }
+    .bw-model { font-size: 12px; font-weight: 700; color: var(--text); }
+    .bw-meta  { font-size: 10px; color: var(--muted); margin-top: 3px; }
+    .bw-conf  { font-size: 18px; font-weight: 800; margin-top: 5px; }
+
+    /* Trend SVG */
+    .trend-wrap { background: var(--bg); border-radius: 8px; padding: 12px; border: 1px solid var(--border); }
+    .trend-svg  { width: 100%; overflow: visible; }
+    .trend-label { font-size: 8px; fill: var(--muted, #8b949e); }
   </style>
 </head>
 <body>
@@ -259,6 +494,7 @@
   <header>
     <div class="logo">LIFT<em>UP</em></div>
     <div class="header-sub">Yapay Zeka Destekli 3D Model Doğrulama</div>
+    <button class="stats-btn" @click="openStats">📊 İstatistikler</button>
     <div class="header-badge">AYBÜ EEE &nbsp;|&nbsp; <b>TUSAŞ</b></div>
   </header>
 
@@ -350,6 +586,9 @@
           {{ loading ? '⏳ Çalışıyor...' : '▶  Analizi Başlat' }}
         </button>
         <button class="btn btn-ghost" @click="resetScene" :disabled="loading">↺ Temizle</button>
+        <button class="btn-pdf" v-if="stats && currentAnalysisId" @click="downloadPdf">
+          ⬇ PDF Rapor Kaydet
+        </button>
       </div>
 
       <!-- Renk skalası -->
@@ -410,6 +649,19 @@
             <div class="stat-lbl">ICP RMSE</div>
             <div class="stat-val c-info">{{ stats.icp_rmse }}<span class="stat-u"> mm</span></div>
           </div>
+          <div class="stat-card">
+            <div class="stat-lbl">Küme</div>
+            <div class="stat-val c-warn">{{ stats.anomaly_clusters ?? '—' }}<span class="stat-u"> adet</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-lbl">Ort. Sapma</div>
+            <div class="stat-val c-info">{{ stats.mean_deviation }}<span class="stat-u"> mm</span></div>
+          </div>
+        </div>
+
+        <div v-if="stats.icp_method" style="margin-top:8px;font-size:9px;color:var(--muted);line-height:1.7">
+          <span style="color:var(--accent)">ICP:</span> {{ stats.icp_method }}<br>
+          <span style="color:var(--accent)">Sapma:</span> {{ stats.deviation_method }}
         </div>
 
         <div v-if="defects.length" style="margin-top:10px">
@@ -427,6 +679,60 @@
             <span class="risk-badge" :class="'risk-' + d.risk.level">{{ d.risk.label }}</span>
           </div>
         </div>
+      </div>
+
+      <!-- Geçmiş -->
+      <div class="s">
+        <div class="history-toggle" @click="historyOpen = !historyOpen">
+          <div class="s-title" style="margin-bottom:0">Analiz Geçmişi ({{ history.length }})</div>
+          <span class="history-chevron" :class="{open: historyOpen}">▼</span>
+        </div>
+
+        <template v-if="historyOpen">
+          <div style="margin-top:10px">
+            <div v-if="!history.length" class="hist-empty">Henüz kayıtlı analiz yok.</div>
+            <div
+              class="hist-item"
+              v-for="h in history"
+              :key="h.id"
+              @click.self="loadHistoryItem(h.id)"
+            >
+              <div class="hist-row">
+                <div @click="loadHistoryItem(h.id)" style="flex:1;min-width:0">
+                  <div class="hist-model">{{ h.model }}</div>
+                  <div class="hist-time">{{ fmtTime(h.timestamp) }}</div>
+                </div>
+                <button class="hist-cmp" :class="{active: compareSelection.includes(h.id)}"
+                        @click.stop="toggleCompare(h.id)" title="Karşılaştırmaya Ekle">⊕</button>
+<button class="hist-pdf" @click.stop="downloadPdfById(h.id)" title="PDF İndir">⬇</button>
+                <button class="hist-del" @click.stop="deleteHistoryItem(h.id)" title="Sil">✕</button>
+              </div>
+              <div class="hist-meta" @click="loadHistoryItem(h.id)">
+                <span class="hist-conf" :style="confColor(h.conformance)">{{ h.conformance.toFixed(1) }}%</span>
+                <span class="verdict-pill" :class="'vd-' + h.verdict" style="padding:2px 6px;font-size:9px">
+                  {{ verdictIcon(h.verdict) }} {{ verdictText(h.verdict) }}
+                </span>
+                <span class="risk-badge" :class="'risk-' + h.overall_risk" style="font-size:9px">
+                  {{ riskLabel(h.overall_risk) }}
+                </span>
+              </div>
+              <div style="font-size:9px;color:var(--muted);margin-top:4px;cursor:default"
+                   @click="loadHistoryItem(h.id)">
+                {{ h.n_points.toLocaleString() }} nokta &nbsp;·&nbsp; σ={{ h.noise_std.toFixed(2) }} &nbsp;·&nbsp; {{ h.defect_count }} hata
+              </div>
+            </div>
+            <div class="cmp-bar" v-if="compareSelection.length > 0">
+              <span>{{ compareSelection.length === 1 ? '1 seçildi — 1 tane daha seçin' : '2 analiz seçildi' }}</span>
+              <div style="display:flex;gap:6px">
+                <button class="btn-cmp" v-if="compareSelection.length === 2" @click="runCompare">Karşılaştır</button>
+                <button class="btn-cmp-clear" @click="compareSelection = []">✕</button>
+              </div>
+            </div>
+<button class="hist-clear" v-if="history.length" @click="clearHistory">
+              Geçmişi Temizle
+            </button>
+          </div>
+        </template>
       </div>
 
     </aside>
@@ -473,6 +779,219 @@
     </main>
 
   </div>
+
+  <!-- ── İstatistik Modalı ── -->
+  <div class="stats-modal" v-if="statsData" @click.self="statsData = null">
+    <div class="stats-box">
+      <div class="stats-head">
+        <h2>📊 Analiz İstatistikleri</h2>
+        <button class="cmp-close" @click="statsData = null">✕</button>
+      </div>
+      <div class="stats-body">
+
+        <!-- Özet Kartlar -->
+        <div class="stats-cards">
+          <div class="stats-card">
+            <div class="stats-card-lbl">Toplam Analiz</div>
+            <div class="stats-card-val c-info">{{ statsData.count }}</div>
+            <div class="stats-card-sub">kayıtlı</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-card-lbl">Ortalama Uyum</div>
+            <div class="stats-card-val" :style="{color: confColorStr(statsData.avg_conformance)}">
+              {{ statsData.avg_conformance }}%
+            </div>
+            <div class="stats-card-sub">min {{ statsData.min_conformance }}% — maks {{ statsData.max_conformance }}%</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-card-lbl">Ortalama RMS</div>
+            <div class="stats-card-val c-warn">{{ statsData.avg_rms }} <span style="font-size:12px;font-weight:400">mm</span></div>
+            <div class="stats-card-sub">sapma ortalaması</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-card-lbl">Kabul Oranı</div>
+            <div class="stats-card-val c-ok">
+              {{ statsData.verdicts.accept ? ((statsData.verdicts.accept / statsData.count)*100).toFixed(0) : 0 }}%
+            </div>
+            <div class="stats-card-sub">KABUL kararı</div>
+          </div>
+        </div>
+
+        <!-- Trend Grafiği -->
+        <div class="stats-section" v-if="statsData.trend && statsData.trend.length > 1">
+          <div class="stats-section-title">Son {{ statsData.trend.length }} Analiz — Uyum Trendi</div>
+          <div class="trend-wrap">
+            <svg class="trend-svg" :viewBox="`0 0 ${trendW} ${trendH}`" :height="trendH">
+              <!-- Izgara çizgileri -->
+              <line v-for="y in [70,80,90,100]" :key="y"
+                    x1="30" :x2="trendW - 10"
+                    :y1="trendY(y)" :y2="trendY(y)"
+                    stroke="#30363d" stroke-width="1"/>
+              <text v-for="y in [70,80,90,100]" :key="'l'+y"
+                    x="25" :y="trendY(y)+3" text-anchor="end" class="trend-label">{{ y }}%</text>
+
+              <!-- Tolerans bölgesi (≥90 yeşil) -->
+              <rect x="30" :y="trendY(100)" :width="trendW - 40" :height="trendY(90) - trendY(100)"
+                    fill="#3fb95010"/>
+              <rect x="30" :y="trendY(90)" :width="trendW - 40" :height="trendY(70) - trendY(90)"
+                    fill="#d2992210"/>
+
+              <!-- Çizgi -->
+              <polyline
+                :points="statsData.trend.map((p,i) => `${trendX(i)},${trendY(p.conformance)}`).join(' ')"
+                fill="none" stroke="#58a6ff" stroke-width="2" stroke-linejoin="round"/>
+
+              <!-- Noktalar -->
+              <circle v-for="(p,i) in statsData.trend" :key="i"
+                      :cx="trendX(i)" :cy="trendY(p.conformance)" r="3"
+                      :fill="p.verdict === 'accept' ? '#3fb950' : p.verdict === 'conditional' ? '#d29922' : '#f85149'"/>
+
+              <!-- X ekseni etiketleri -->
+              <text v-for="(p,i) in statsData.trend" :key="'d'+i"
+                    :x="trendX(i)" :y="trendH - 2" text-anchor="middle" class="trend-label"
+                    v-if="i % Math.ceil(statsData.trend.length/6) === 0">
+                #{{ p.id }}
+              </text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Karar + Risk Dağılımı -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:18px">
+          <div class="stats-section">
+            <div class="stats-section-title">Karar Dağılımı</div>
+            <div class="dist-row" v-for="(cfg, key) in verdictCfg" :key="key" v-if="statsData.verdicts[key] !== undefined || true">
+              <span class="dist-lbl">{{ cfg.label }}</span>
+              <div class="dist-bar-wrap">
+                <div class="dist-bar" :style="{width: ((statsData.verdicts[key]||0)/statsData.count*100)+'%', background: cfg.color}"></div>
+              </div>
+              <span class="dist-cnt">{{ statsData.verdicts[key] || 0 }}</span>
+            </div>
+          </div>
+          <div class="stats-section">
+            <div class="stats-section-title">Risk Dağılımı</div>
+            <div class="dist-row" v-for="(cfg, key) in riskCfg" :key="key">
+              <span class="dist-lbl">{{ cfg.label }}</span>
+              <div class="dist-bar-wrap">
+                <div class="dist-bar" :style="{width: ((statsData.risks[key]||0)/statsData.count*100)+'%', background: cfg.color}"></div>
+              </div>
+              <span class="dist-cnt">{{ statsData.risks[key] || 0 }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- En İyi / En Kötü -->
+        <div class="stats-section">
+          <div class="stats-section-title">En İyi & En Kötü Analiz</div>
+          <div class="bw-grid">
+            <div class="bw-card" style="border-color:var(--green)">
+              <div class="bw-label" style="color:var(--green)">🏆 En İyi</div>
+              <div class="bw-model">{{ statsData.best.model }}</div>
+              <div class="bw-meta">Analiz #{{ statsData.best.id }} — {{ fmtTime(statsData.best.timestamp) }}</div>
+              <div class="bw-conf" style="color:var(--green)">{{ statsData.best.conformance }}%</div>
+            </div>
+            <div class="bw-card" style="border-color:var(--danger)">
+              <div class="bw-label" style="color:var(--danger)">⚠ En Kötü</div>
+              <div class="bw-model">{{ statsData.worst.model }}</div>
+              <div class="bw-meta">Analiz #{{ statsData.worst.id }} — {{ fmtTime(statsData.worst.timestamp) }}</div>
+              <div class="bw-conf" style="color:var(--danger)">{{ statsData.worst.conformance }}%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Model Dağılımı -->
+        <div class="stats-section" v-if="Object.keys(statsData.models).length > 1">
+          <div class="stats-section-title">Model Kullanımı</div>
+          <div class="dist-row" v-for="(cnt, model) in statsData.models" :key="model">
+            <span class="dist-lbl" style="min-width:120px">{{ model }}</span>
+            <div class="dist-bar-wrap">
+              <div class="dist-bar" :style="{width: (cnt/statsData.count*100)+'%', background:'#58a6ff'}"></div>
+            </div>
+            <span class="dist-cnt">{{ cnt }}</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Karşılaştırma Modalı ── -->
+  <div class="cmp-modal" v-if="cmpResult" @click.self="cmpResult = null">
+    <div class="cmp-box">
+      <div class="cmp-head">
+        <h2>⊕ Karşılaştırmalı Analiz</h2>
+        <button class="cmp-close" @click="cmpResult = null">✕</button>
+      </div>
+
+      <div class="cmp-cols">
+        <!-- Sol: A -->
+        <div class="cmp-col">
+          <div class="cmp-col-head">Analiz A &nbsp;#{{ cmpResult.a.id }}</div>
+          <div class="cmp-model">{{ cmpResult.a.model }}</div>
+          <div class="cmp-time">{{ fmtTime(cmpResult.a.timestamp) }}</div>
+          <div class="cmp-winner-badge"
+               :class="cmpResult.overall === 'a' ? 'cmp-winner-a' : cmpResult.overall === 'tie' ? 'cmp-tie' : 'cmp-tie'">
+            {{ cmpResult.overall === 'a' ? '🏆 Kazanan' : cmpResult.overall === 'tie' ? '— Berabere' : '— Geride' }}
+          </div>
+
+          <div class="cmp-metrics">
+            <div class="cmp-metric-row" v-for="m in metricDefs" :key="m.key">
+              <span class="cmp-metric-lbl">{{ m.label }}</span>
+              <span>
+                <span class="cmp-metric-val"
+                      :class="cmpResult.winners[m.key] === 'a' ? 'cmp-win' : cmpResult.winners[m.key] === 'tie' ? 'cmp-tie2' : 'cmp-lose'">
+                  {{ cmpResult.a.stats[m.key] }}{{ m.unit }}
+                </span>
+                <span class="cmp-delta cmp-win" v-if="cmpResult.winners[m.key] === 'a'">✓</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sağ: B -->
+        <div class="cmp-col">
+          <div class="cmp-col-head">Analiz B &nbsp;#{{ cmpResult.b.id }}</div>
+          <div class="cmp-model">{{ cmpResult.b.model }}</div>
+          <div class="cmp-time">{{ fmtTime(cmpResult.b.timestamp) }}</div>
+          <div class="cmp-winner-badge"
+               :class="cmpResult.overall === 'b' ? 'cmp-winner-b' : cmpResult.overall === 'tie' ? 'cmp-tie' : 'cmp-tie'">
+            {{ cmpResult.overall === 'b' ? '🏆 Kazanan' : cmpResult.overall === 'tie' ? '— Berabere' : '— Geride' }}
+          </div>
+
+          <div class="cmp-metrics">
+            <div class="cmp-metric-row" v-for="m in metricDefs" :key="m.key">
+              <span class="cmp-metric-lbl">{{ m.label }}</span>
+              <span>
+                <span class="cmp-metric-val"
+                      :class="cmpResult.winners[m.key] === 'b' ? 'cmp-win' : cmpResult.winners[m.key] === 'tie' ? 'cmp-tie2' : 'cmp-lose'">
+                  {{ cmpResult.b.stats[m.key] }}{{ m.unit }}
+                </span>
+                <span class="cmp-delta cmp-win" v-if="cmpResult.winners[m.key] === 'b'">✓</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Skor -->
+      <div class="cmp-score-row">
+        <div class="cmp-score-card" :class="{ winner: cmpResult.overall === 'a' }">
+          <div class="cmp-score-num" :class="cmpResult.overall === 'a' ? 'cmp-win' : 'cmp-tie2'">
+            {{ cmpResult.score.a }}
+          </div>
+          <div class="cmp-score-lbl">Analiz A kazandığı metrik</div>
+        </div>
+        <div class="cmp-score-card" :class="{ winner: cmpResult.overall === 'b' }">
+          <div class="cmp-score-num" :class="cmpResult.overall === 'b' ? 'cmp-win' : 'cmp-tie2'">
+            {{ cmpResult.score.b }}
+          </div>
+          <div class="cmp-score-lbl">Analiz B kazandığı metrik</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -755,16 +1274,54 @@ function buildDefectMarkers(defectRegions) {
 // ─── Vue app ───────────────────────────────────────────────────────────────────
 createApp({
   setup() {
-    const models    = ref([]);
-    const form      = reactive({ model: 'sedefe1.stl', n_points: 8000, noise_std: 0.3, defect_count: 3 });
-    const viewMode  = ref('both');   // 'ref' | 'scan' | 'both'
-    const loading   = ref(false);
-    const step      = ref('');
-    const stats     = ref(null);
-    const defects   = ref([]);
-    const hasData   = ref(false);
-    const refLoaded = ref(false);
-    const toast     = reactive({ show: false, msg: '', cls: '' });
+    const models      = ref([]);
+    const form        = reactive({ model: 'sedefe1.stl', n_points: 8000, noise_std: 0.3, defect_count: 3 });
+    const viewMode    = ref('both');   // 'ref' | 'scan' | 'both'
+    const loading     = ref(false);
+    const step        = ref('');
+    const stats       = ref(null);
+    const defects     = ref([]);
+    const hasData     = ref(false);
+    const refLoaded   = ref(false);
+    const toast       = reactive({ show: false, msg: '', cls: '' });
+    const history           = ref([]);
+    const historyOpen       = ref(true);
+    const currentAnalysisId = ref(null);
+    const compareSelection  = ref([]);
+    const cmpResult         = ref(null);
+    const statsData         = ref(null);
+
+    const trendW = 680, trendH = 120;
+    const trendX = (i) => 30 + i * ((trendW - 40) / Math.max(1, (statsData.value?.trend?.length || 1) - 1));
+    const trendY = (v) => trendH - 20 - ((v - 65) / 40) * (trendH - 30);
+
+    const verdictCfg = {
+      accept:      { label: 'KABUL',    color: '#3fb950' },
+      conditional: { label: 'KOŞULLU', color: '#d29922' },
+      reject:      { label: 'RED',      color: '#f85149' },
+    };
+    const riskCfg = {
+      low:      { label: 'Düşük',  color: '#3fb950' },
+      medium:   { label: 'Orta',   color: '#d29922' },
+      high:     { label: 'Yüksek', color: '#ff7b00' },
+      critical: { label: 'Kritik', color: '#f85149' },
+    };
+
+    function confColorStr(c) {
+      if (c >= 95) return '#3fb950';
+      if (c >= 85) return '#d29922';
+      if (c >= 70) return '#ff7b00';
+      return '#f85149';
+    }
+
+    const metricDefs = [
+      { key: 'conformance',   label: 'Uyum Oranı',  unit: '%'  },
+      { key: 'rms',           label: 'RMS Sapma',   unit: ' mm'},
+      { key: 'max_deviation', label: 'Maks Sapma',  unit: ' mm'},
+      { key: 'mean_deviation',label: 'Ort. Sapma',  unit: ' mm'},
+      { key: 'anomaly_count', label: 'Anomali',     unit: ' pt'},
+      { key: 'icp_rmse',      label: 'ICP RMSE',    unit: ' mm'},
+    ];
 
     const devMax    = computed(() => stats.value ? stats.value.max_deviation.toFixed(2) : '—');
 
@@ -806,6 +1363,14 @@ createApp({
       setTimeout(() => { toast.show = false; }, ms);
     }
 
+    async function fetchHistory() {
+      try {
+        const r = await fetch('/api/history?limit=50');
+        const d = await r.json();
+        history.value = d.history;
+      } catch { /* sessiz hata */ }
+    }
+
     onMounted(async () => {
       initThree();
       try {
@@ -818,6 +1383,7 @@ createApp({
           refLoaded.value = true;
         }
       } catch { showToast('API bağlantısı kurulamadı', false); }
+      fetchHistory();
     });
 
     function setMode(m) {
@@ -839,11 +1405,40 @@ createApp({
       refLoaded.value = true;
     }
 
+    // Analiz verisini (API yanıtı veya geçmişten yüklenen) sahneye ve panele yazar
+    function applyAnalysisData(data) {
+      if (scanPts)     { scene.remove(scanPts);     scanPts.geometry.dispose(); }
+      if (anomPts)     { scene.remove(anomPts);     anomPts.geometry.dispose(); }
+      if (defectGroup) {
+        defectGroup.traverse(child => {
+          if (child.element && child.element.parentNode) child.element.remove();
+        });
+        scene.remove(defectGroup);
+        defectGroup = null;
+      }
+
+      scanPts     = buildScanCloud(data.points, data.colors, data.point_defect_types);
+      anomPts     = buildAnomCloud(data.points, data.anomalies, data.point_defect_types);
+      defectGroup = buildDefectMarkers(data.defect_regions);
+
+      applyModeToRef(viewMode.value);
+      const showScan = (viewMode.value === 'scan' || viewMode.value === 'both');
+      scanPts.visible = showScan;
+      scene.add(scanPts);
+      if (anomPts) { anomPts.visible = showScan; scene.add(anomPts); }
+      defectGroup.visible = showScan;
+      scene.add(defectGroup);
+
+      stats.value   = data.stats;
+      defects.value = data.defect_regions;
+      hasData.value = true;
+      frameAll();
+    }
+
     async function runAnalysis() {
       loading.value = true;
       step.value    = 'Referans modeli yükleniyor...';
 
-      // Referans mesh'i mevcut moda göre yükle (önceden yoksa)
       if (!refMesh) {
         const showRef = (viewMode.value !== 'scan');
         loadRefMesh(form.model, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
@@ -866,35 +1461,13 @@ createApp({
           throw new Error(e.detail || 'Sunucu hatası');
         }
 
-        step.value  = 'Anomali tespiti + görselleştirme...';
-        const data  = await res.json();
+        step.value = 'Anomali tespiti + görselleştirme...';
+        const data = await res.json();
 
-        // Eski nesneleri temizle
-        if (scanPts)     { scene.remove(scanPts);    scanPts.geometry.dispose(); }
-        if (anomPts)     { scene.remove(anomPts);    anomPts.geometry.dispose(); }
-        if (defectGroup) { scene.remove(defectGroup); }
-
-        scanPts    = buildScanCloud(data.points, data.colors, data.point_defect_types);
-        anomPts    = buildAnomCloud(data.points, data.anomalies, data.point_defect_types);
-        defectGroup = buildDefectMarkers(data.defect_regions);
-
-        // Moda göre görünürlük
-        applyModeToRef(viewMode.value);
-        scanPts.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
-        scene.add(scanPts);
-        if (anomPts) {
-          anomPts.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
-          scene.add(anomPts);
-        }
-        defectGroup.visible = (viewMode.value === 'scan' || viewMode.value === 'both');
-        scene.add(defectGroup);
-
-        stats.value   = data.stats;
-        defects.value = data.defect_regions;
-        hasData.value = true;
-
-        frameAll();
+        applyAnalysisData(data);
+        currentAnalysisId.value = data.analysis_id ?? null;
         showToast(`Tamamlandı — ${data.stats.anomaly_count} anomali, RMS ${data.stats.rms} mm`);
+        fetchHistory();
 
       } catch (err) {
         showToast('Hata: ' + err.message, false, 6000);
@@ -905,10 +1478,151 @@ createApp({
       }
     }
 
+    async function loadHistoryItem(id) {
+      loading.value = true;
+      step.value    = 'Kayıt yükleniyor...';
+      try {
+        const res = await fetch(`/api/history/${id}`);
+        if (!res.ok) throw new Error('Kayıt bulunamadı');
+        const item = await res.json();
+        const data = item.result;
+
+        // Modeli güncelle ve referans mesh'i yeniden yükle
+        const modelName = item.model;
+        form.model = modelName;
+        const opacity = viewMode.value === 'both' ? 0.18 : 1.0;
+        const showRef = (viewMode.value !== 'scan');
+        loadRefMesh(modelName, opacity, showRef);
+        refLoaded.value = true;
+
+        applyAnalysisData(data);
+        currentAnalysisId.value = id;
+        showToast(`Kayıt #${id} yüklendi`);
+      } catch (err) {
+        showToast('Yükleme hatası: ' + err.message, false, 5000);
+      } finally {
+        loading.value = false;
+        step.value    = '';
+      }
+    }
+
+    async function deleteHistoryItem(id) {
+      try {
+        const res = await fetch(`/api/history/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Silinemedi');
+        history.value = history.value.filter(h => h.id !== id);
+        showToast('Kayıt silindi');
+      } catch (err) {
+        showToast('Silme hatası: ' + err.message, false, 4000);
+      }
+    }
+
+    async function clearHistory() {
+      if (!confirm('Tüm analiz geçmişi silinecek. Emin misiniz?')) return;
+      try {
+        await fetch('/api/history', { method: 'DELETE' });
+        history.value = [];
+        showToast('Geçmiş temizlendi');
+      } catch (err) {
+        showToast('Temizleme hatası', false, 4000);
+      }
+    }
+
+    async function saveExcel(id) {
+      try {
+        const res = await fetch(`/api/excel/${id}`);
+        if (!res.ok) throw new Error('Sunucu hatası');
+        const data = await res.json();
+        showToast(`Excel kaydedildi: ${data.filename}`);
+      } catch (err) {
+        showToast('Excel kaydedilemedi: ' + err.message, false, 5000);
+      }
+    }
+
+    async function saveHistoryExcel() {
+      try {
+        const res = await fetch('/api/excel-history');
+        if (!res.ok) throw new Error('Sunucu hatası');
+        const data = await res.json();
+        showToast(`Geçmiş Excel kaydedildi: ${data.filename}`);
+      } catch (err) {
+        showToast('Excel kaydedilemedi: ' + err.message, false, 5000);
+      }
+    }
+
+    async function downloadPdfById(id) {
+      try {
+        const res = await fetch(`/api/report/${id}`);
+        if (!res.ok) throw new Error('Sunucu hatası');
+        const data = await res.json();
+        showToast(`PDF kaydedildi: ${data.filename}`);
+      } catch (err) {
+        showToast('PDF kaydedilemedi: ' + err.message, false, 5000);
+      }
+    }
+
+    function downloadPdf() {
+      if (currentAnalysisId.value) downloadPdfById(currentAnalysisId.value);
+    }
+
+    async function openStats() {
+      try {
+        const res = await fetch('/api/stats');
+        if (!res.ok) throw new Error();
+        statsData.value = await res.json();
+      } catch {
+        showToast('İstatistikler yüklenemedi', false);
+      }
+    }
+
+    function toggleCompare(id) {
+      const idx = compareSelection.value.indexOf(id);
+      if (idx >= 0) {
+        compareSelection.value.splice(idx, 1);
+      } else if (compareSelection.value.length < 2) {
+        compareSelection.value.push(id);
+      } else {
+        // 3. seçimde ilkini çıkar, yeniyi ekle
+        compareSelection.value.shift();
+        compareSelection.value.push(id);
+      }
+    }
+
+    async function runCompare() {
+      const [id1, id2] = compareSelection.value;
+      try {
+        const res = await fetch(`/api/compare?id1=${id1}&id2=${id2}`);
+        if (!res.ok) throw new Error('Karşılaştırma başarısız');
+        cmpResult.value = await res.json();
+      } catch (err) {
+        showToast('Hata: ' + err.message, false, 5000);
+      }
+    }
+
+    function fmtTime(ts) {
+      const d = new Date(ts);
+      const pad = n => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} `
+           + `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    function confColor(c) {
+      if (c >= 95) return { color: '#3fb950' };
+      if (c >= 85) return { color: '#d29922' };
+      if (c >= 70) return { color: '#ff7b00' };
+      return { color: '#f85149' };
+    }
+
     function resetScene() {
       if (scanPts)     { scene.remove(scanPts);     scanPts.geometry.dispose();  scanPts = null; }
       if (anomPts)     { scene.remove(anomPts);     anomPts.geometry.dispose();  anomPts = null; }
-      if (defectGroup) { scene.remove(defectGroup); defectGroup = null; }
+      if (defectGroup) {
+        defectGroup.traverse(child => {
+          if (child.element && child.element.parentNode) child.element.remove();
+        });
+        scene.remove(defectGroup);
+        defectGroup = null;
+      }
       stats.value   = null;
       defects.value = [];
       hasData.value = false;
@@ -939,8 +1653,16 @@ createApp({
     return {
       models, form, viewMode, loading, step,
       stats, defects, hasData, refLoaded, toast,
+      history, historyOpen, currentAnalysisId,
+      compareSelection, cmpResult, metricDefs,
+      toggleCompare, runCompare,
+      statsData, trendW, trendH, trendX, trendY,
+      verdictCfg, riskCfg, confColorStr, openStats,
       devMax, rmsC, anomC, modeLabel, modeColor,
       setMode, onModelChange, runAnalysis, resetScene,
+      loadHistoryItem, deleteHistoryItem, clearHistory,
+      downloadPdf, downloadPdfById, saveExcel, saveHistoryExcel,
+      fetchHistory, fmtTime, confColor,
       defectIcon, defectLabel, defectStyle,
       riskLabel, verdictIcon, verdictText,
       ringC, ringOffset, conformColor,

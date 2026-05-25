@@ -17,5 +17,5 @@ echo.
 echo  Durdurmak icin bu pencereyi kapatin.
 echo.
 
-python main.py
+"C:\Users\merve\AppData\Local\Programs\Python\Python311\python.exe" main.py
 pause
