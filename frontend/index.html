@@ -292,6 +292,19 @@
     }
     .hist-clear:hover { border-color: var(--danger); color: var(--danger); }
 
+    /* ── Upload butonu ── */
+    .upload-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+    .upload-row select { flex: 1; }
+    .btn-upload {
+      flex-shrink: 0; padding: 6px 10px; border-radius: 5px;
+      background: rgba(88,166,255,.12); border: 1px solid var(--accent);
+      color: var(--accent); font-size: 11px; font-weight: 700;
+      cursor: pointer; white-space: nowrap; transition: opacity .15s;
+    }
+    .btn-upload:hover:not(:disabled) { opacity: .80; }
+    .btn-upload:disabled { opacity: .4; cursor: not-allowed; }
+    .upload-prog { font-size: 10px; color: var(--accent); margin-top: 3px; min-height: 14px; }
+
     /* ── PDF butonu ── */
     .btn-pdf {
       width: 100%; padding: 9px; border-radius: 5px; margin-top: 6px;
@@ -525,16 +538,60 @@
         </div>
       </div>
 
-      <!-- Model seçimi -->
+      <!-- Analiz Modu -->
       <div class="s">
+        <div class="s-title">Analiz Modu</div>
+        <div class="view-tabs">
+          <button class="vtab" :class="{active: analysisMode==='sim'}"  @click="analysisMode='sim'">Simülasyon</button>
+          <button class="vtab" :class="{active: analysisMode==='real'}" @click="analysisMode='real'">Gerçek Tarama</button>
+        </div>
+        <div class="vtab-desc" style="margin-top:6px">
+          <template v-if="analysisMode==='sim'">
+            Referans CAD'dan yapay hatalar enjekte ederek simüle tarama üretir.
+          </template>
+          <template v-else>
+            <b style="color:var(--green)">İki STL dosyasını</b> doğrudan karşılaştırır. Doğru model vs. hatalı/farklı model. Simülasyon yok.
+          </template>
+        </div>
+      </div>
+
+      <!-- Model seçimi — Simülasyon modu -->
+      <div class="s" v-if="analysisMode==='sim'">
         <div class="s-title">Referans STL</div>
-        <select v-model="form.model" @change="onModelChange" :disabled="loading">
-          <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
-        </select>
+        <div class="upload-row">
+          <select v-model="form.model" @change="onModelChange" :disabled="loading">
+            <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <button class="btn-upload" :disabled="loading" @click="triggerUpload('sim')">+ Yükle</button>
+        </div>
+        <div class="upload-prog">{{ uploadMsg }}</div>
+        <input type="file" accept=".stl" ref="fileInputSim" style="display:none" @change="e => onFileSelected(e,'sim')"/>
+      </div>
+
+      <!-- Model seçimi — Gerçek Tarama modu -->
+      <div class="s" v-if="analysisMode==='real'">
+        <div class="s-title">Doğru Model (Referans CAD)</div>
+        <div class="upload-row">
+          <select v-model="form.ref_model" @change="onModelChange" :disabled="loading">
+            <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <button class="btn-upload" :disabled="loading" @click="triggerUpload('ref')">+ Yükle</button>
+        </div>
+        <input type="file" accept=".stl" ref="fileInputRef" style="display:none" @change="e => onFileSelected(e,'ref')"/>
+
+        <label style="margin-top:10px">Hatalı / Farklı Model</label>
+        <div class="upload-row">
+          <select v-model="form.scan_model" :disabled="loading">
+            <option v-for="m in models" :key="m" :value="m">{{ m }}</option>
+          </select>
+          <button class="btn-upload" :disabled="loading" @click="triggerUpload('scan')">+ Yükle</button>
+        </div>
+        <div class="upload-prog">{{ uploadMsg }}</div>
+        <input type="file" accept=".stl" ref="fileInputScan" style="display:none" @change="e => onFileSelected(e,'scan')"/>
       </div>
 
       <!-- Simülasyon açıklaması -->
-      <div class="s">
+      <div class="s" v-if="analysisMode==='sim'">
         <div class="s-title">Simülasyon Hakkında</div>
         <div class="sim-box">
           <div class="sim-row">
@@ -560,6 +617,30 @@
         </div>
       </div>
 
+      <!-- Gerçek Tarama açıklaması -->
+      <div class="s" v-if="analysisMode==='real'">
+        <div class="s-title">Model Karşılaştırma Hakkında</div>
+        <div class="sim-box">
+          <div class="sim-row">
+            <span class="sim-tag ref-tag">Doğru</span>
+            <span>{{ form.ref_model }} — ideal referans</span>
+          </div>
+          <div class="sim-arrow">↓ ICP ile hizala</div>
+          <div class="sim-row">
+            <span class="sim-tag scan-tag">Karşılaştır</span>
+            <span>{{ form.scan_model }} — test modeli</span>
+          </div>
+          <div class="sim-arrow">↓ sapma + anomali tespiti</div>
+          <div class="sim-row">
+            <span class="sim-tag ai-tag">AI</span>
+            <span>farkları ve hataları tespit et</span>
+          </div>
+        </div>
+        <div style="margin-top:8px; font-size:10px; color:var(--muted); line-height:1.6">
+          İki STL dosyası arasındaki geometrik farklılıklar analiz edilir. LiDAR taraması, hatalı üretim veya farklı tasarım versiyonları karşılaştırılabilir.
+        </div>
+      </div>
+
       <!-- Parametreler -->
       <div class="s">
         <div class="s-title">Tarama Parametreleri</div>
@@ -570,17 +651,19 @@
           <span class="val">{{ form.n_points }}</span>
         </div>
 
-        <label>Sensör gürültüsü σ — {{ form.noise_std.toFixed(2) }} mm</label>
-        <div class="row">
-          <input type="range" v-model.number="form.noise_std" min="0.05" max="2.0" step="0.05" :disabled="loading"/>
-          <span class="val">{{ form.noise_std.toFixed(2) }}</span>
-        </div>
+        <template v-if="analysisMode==='sim'">
+          <label>Sensör gürültüsü σ — {{ form.noise_std.toFixed(2) }} mm</label>
+          <div class="row">
+            <input type="range" v-model.number="form.noise_std" min="0.05" max="2.0" step="0.05" :disabled="loading"/>
+            <span class="val">{{ form.noise_std.toFixed(2) }}</span>
+          </div>
 
-        <label>Enjekte edilecek hata sayısı — {{ form.defect_count }}</label>
-        <div class="row">
-          <input type="range" v-model.number="form.defect_count" min="0" max="8" step="1" :disabled="loading"/>
-          <span class="val">{{ form.defect_count }}</span>
-        </div>
+          <label>Enjekte edilecek hata sayısı — {{ form.defect_count }}</label>
+          <div class="row">
+            <input type="range" v-model.number="form.defect_count" min="0" max="8" step="1" :disabled="loading"/>
+            <span class="val">{{ form.defect_count }}</span>
+          </div>
+        </template>
 
         <button class="btn btn-primary" @click="runAnalysis" :disabled="loading">
           {{ loading ? '⏳ Çalışıyor...' : '▶  Analizi Başlat' }}
@@ -1274,8 +1357,16 @@ function buildDefectMarkers(defectRegions) {
 // ─── Vue app ───────────────────────────────────────────────────────────────────
 createApp({
   setup() {
-    const models      = ref([]);
-    const form        = reactive({ model: 'sedefe1.stl', n_points: 8000, noise_std: 0.3, defect_count: 3 });
+    const models       = ref([]);
+    const analysisMode = ref('sim');   // 'sim' | 'real'
+    const form         = reactive({
+      model: 'sedefe1.stl', n_points: 8000, noise_std: 0.3, defect_count: 3,
+      ref_model: 'sedefe1.stl', scan_model: 'lidarmesh1.stl',
+    });
+    const uploadMsg     = ref('');
+    const fileInputSim  = ref(null);
+    const fileInputRef  = ref(null);
+    const fileInputScan = ref(null);
     const viewMode    = ref('both');   // 'ref' | 'scan' | 'both'
     const loading     = ref(false);
     const step        = ref('');
@@ -1358,6 +1449,38 @@ createApp({
       return { background: c };
     });
 
+    function triggerUpload(slot) {
+      const map = { sim: fileInputSim, ref: fileInputRef, scan: fileInputScan };
+      map[slot]?.value?.click();
+    }
+
+    async function onFileSelected(evt, slot) {
+      const file = evt.target.files?.[0];
+      if (!file) return;
+      evt.target.value = '';   // aynı dosya tekrar seçilebilsin
+      uploadMsg.value = `Yükleniyor: ${file.name}…`;
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        const r = await fetch('/api/upload', { method: 'POST', body: fd });
+        if (!r.ok) { const e = await r.json(); throw new Error(e.detail || 'Hata'); }
+        const data = await r.json();
+        // Modeller listesini güncelle
+        const mr = await fetch('/api/models');
+        const md = await mr.json();
+        models.value = md.models;
+        // Yüklenen dosyayı ilgili alana ata
+        if (slot === 'sim')  form.model     = data.filename;
+        if (slot === 'ref')  { form.ref_model  = data.filename; onModelChange(); }
+        if (slot === 'scan') form.scan_model = data.filename;
+        uploadMsg.value = '';
+        showToast(`${data.filename} yüklendi (${(data.size/1024).toFixed(0)} KB)`);
+      } catch (e) {
+        uploadMsg.value = '';
+        showToast(`Yükleme hatası: ${e.message}`, false);
+      }
+    }
+
     function showToast(msg, ok = true, ms = 3500) {
       toast.msg  = msg; toast.cls = ok ? 'toast-ok' : 'toast-err'; toast.show = true;
       setTimeout(() => { toast.show = false; }, ms);
@@ -1400,8 +1523,9 @@ createApp({
       defects.value  = [];
       if (scanPts) { scene.remove(scanPts); scanPts.geometry.dispose(); scanPts = null; }
       if (anomPts) { scene.remove(anomPts); anomPts.geometry.dispose(); anomPts = null; }
-      const showRef = (viewMode.value === 'ref' || viewMode.value === 'both');
-      loadRefMesh(form.model, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
+      const modelName = analysisMode.value === 'real' ? form.ref_model : form.model;
+      const showRef   = (viewMode.value === 'ref' || viewMode.value === 'both');
+      loadRefMesh(modelName, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
       refLoaded.value = true;
     }
 
@@ -1439,23 +1563,40 @@ createApp({
       loading.value = true;
       step.value    = 'Referans modeli yükleniyor...';
 
+      const refModelName = analysisMode.value === 'real' ? form.ref_model : form.model;
+
       if (!refMesh) {
         const showRef = (viewMode.value !== 'scan');
-        loadRefMesh(form.model, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
+        loadRefMesh(refModelName, viewMode.value === 'both' ? 0.18 : 1.0, showRef);
       }
 
       try {
-        step.value = 'Simüle tarama + ICP hizalaması...';
-        const res  = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: form.model,
-            n_points: form.n_points,
-            noise_std: form.noise_std,
-            defect_count: form.defect_count,
-          }),
-        });
+        let res;
+        if (analysisMode.value === 'real') {
+          step.value = 'LiDAR mesh yükleniyor + ICP hizalaması...';
+          res = await fetch('/api/analyze-real', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              ref_model:  form.ref_model,
+              scan_model: form.scan_model,
+              n_points:   form.n_points,
+            }),
+          });
+        } else {
+          step.value = 'Simüle tarama + ICP hizalaması...';
+          res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model:        form.model,
+              n_points:     form.n_points,
+              noise_std:    form.noise_std,
+              defect_count: form.defect_count,
+            }),
+          });
+        }
+
         if (!res.ok) {
           const e = await res.json();
           throw new Error(e.detail || 'Sunucu hatası');
@@ -1666,6 +1807,8 @@ createApp({
       defectIcon, defectLabel, defectStyle,
       riskLabel, verdictIcon, verdictText,
       ringC, ringOffset, conformColor,
+      uploadMsg, fileInputSim, fileInputRef, fileInputScan,
+      triggerUpload, onFileSelected, analysisMode,
     };
   }
 }).mount('#app');

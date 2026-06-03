@@ -29,7 +29,7 @@ Gerçek sensör donanımı olmadan da çalışır: sistem, referans STL dosyası
 
 ## Sistem Gereksinimleri
 
-- **Python 3.11** (önerilen) veya 3.9+
+- **Python 3.9 – 3.12** (zorunlu — open3d paketi Python 3.13+ ile uyumlu değildir)
 - İnternet bağlantısı (ilk kurulum için)
 - Modern tarayıcı (Chrome, Firefox, Edge)
 
@@ -37,23 +37,10 @@ Gerçek sensör donanımı olmadan da çalışır: sistem, referans STL dosyası
 
 ## Kurulum
 
-**1. Depoyu klonlayın veya dosyaları indirin:**
-```
-Liftup-3D-Model-Dogrulama-Sistemi/
-├── BASLAT.bat
-├── requirements.txt
-├── README.md
-├── models/
-│   ├── sedefe1.stl
-│   └── sedefe2.stl
-├── backend/
-│   ├── main.py
-│   ├── pipeline.py
-│   ├── database.py
-│   ├── export.py
-│   └── report.py
-└── frontend/
-    └── index.html
+**1. Repoyu klonlayın:**
+```bash
+git clone https://github.com/KULLANICI_ADI/REPO_ADI.git
+cd Liftup-3D-Model-Dogrulama-Sistemi-main
 ```
 
 **2. Gerekli Python paketlerini yükleyin:**
@@ -61,7 +48,9 @@ Liftup-3D-Model-Dogrulama-Sistemi/
 pip install -r requirements.txt
 ```
 
-> İlk kurulum birkaç dakika sürebilir (open3d paketi ~70 MB).
+> İlk kurulum birkaç dakika sürebilir (open3d paketi ~200 MB).  
+> Python 3.13 kullanıyorsanız **3.10 veya 3.11 kurmanız gerekir** — open3d desteklemiyor.  
+> `python --version` komutuyla sürümünüzü kontrol edin.
 
 ---
 
@@ -70,22 +59,31 @@ pip install -r requirements.txt
 ### Yöntem 1 — Çift Tıkla (Kolay)
 `BASLAT.bat` dosyasına çift tıklayın.
 
-> **Not:** `BASLAT.bat` içindeki Python yolu kendi kullanıcı adınıza ve Python sürümünüze göre ayarlanmış olmalıdır.  
-> Örnek (Python 3.11): `"C:\Users\KULLANICI_ADI\AppData\Local\Programs\Python\Python311\python.exe" main.py`  
-> Doğru yolu bulmak için terminalde `where python` komutunu çalıştırın.
-
-Sistem başladıktan sonra tarayıcıda `http://localhost:8000` adresini açın.
+Sistem başladıktan sonra tarayıcıda **http://localhost:8000** adresini açın.
 
 ### Yöntem 2 — Terminal
 ```bash
 cd backend
 python main.py
 ```
-Ardından tarayıcıda `http://localhost:8000` adresine gidin.
+Ardından tarayıcıda **http://localhost:8000** adresine gidin.
 
 ---
 
 ## Kullanım Kılavuzu
+
+### 0. Analiz Modunu Seçin
+
+Sol panelin **"Analiz Modu"** bölümünden iki mod arasında geçiş yapabilirsiniz:
+
+| Mod | Ne Yapar |
+|-----|----------|
+| **Simülasyon** | Referans CAD'dan yapay gürültü ve hatalar eklenerek simüle tarama üretir |
+| **Gerçek Tarama** | Gerçek LiDAR tarama mesh'ini (`.stl`) orijinal CAD ile direkt karşılaştırır |
+
+**Gerçek Tarama modunda** iki dosya seçilir:
+- **Orijinal CAD** → ideal/referans dikdörtgen kutu (`sedefe1.stl` vb.)
+- **Gerçek Tarama Mesh'i** → LiDAR ile taranan cismin mesh'i (`lidarmesh1.stl`)
 
 ### 1. Görüntüleme Modunu Seçin
 
@@ -250,22 +248,22 @@ Hata riski tipi ve büyüklüğüne göre belirlenir:
 ## Proje Dosya Yapısı
 
 ```
-Liftup-3D-Model-Dogrulama-Sistemi/
+Liftup-3D-Model-Dogrulama-Sistemi-main/
 │
-├── BASLAT.bat              # Tek tıkla başlatma (Python yolu ayarlanmalı)
+├── BASLAT.bat              # Tek tıkla başlatma
 ├── requirements.txt        # Python bağımlılıkları
 ├── README.md
 │
-├── models/
-│   ├── sedefe1.stl         # Referans CAD modeli
-│   └── sedefe2.stl         # İkinci referans model
+├── sedefe1.stl             # Referans CAD modeli
+├── sedefe2.stl             # İkinci referans model
+├── lidarmesh1.stl          # Gerçek LiDAR tarama mesh'i (ilaç kutusu)
 │
 ├── backend/
 │   ├── main.py             # FastAPI sunucu + tüm API endpoint'leri
 │   ├── pipeline.py         # Analiz algoritması (ICP, sapma, anomali, uyum)
 │   ├── database.py         # SQLite analiz geçmişi
 │   ├── export.py           # Excel dışa aktarma (openpyxl)
-│   └── report.py           # PDF rapor üretimi (fpdf2)
+│   └── report.py           # PDF rapor üretimi (matplotlib)
 │
 └── frontend/
     └── index.html          # Web arayüzü (Three.js + Vue.js, tek dosya)
@@ -279,7 +277,8 @@ Liftup-3D-Model-Dogrulama-Sistemi/
 |----------|-------|----------|
 | `/` | GET | Web arayüzü |
 | `/api/models` | GET | Mevcut STL dosyaları |
-| `/api/analyze` | POST | Analiz pipeline'ını çalıştır |
+| `/api/analyze` | POST | Simülasyon analiz pipeline'ını çalıştır |
+| `/api/analyze-real` | POST | Gerçek LiDAR tarama analizi |
 | `/api/history` | GET | Analiz geçmişini listele |
 | `/api/history/{id}` | GET | Belirli bir analizi yükle |
 | `/api/history/{id}` | DELETE | Belirli bir analizi sil |
@@ -290,13 +289,22 @@ Liftup-3D-Model-Dogrulama-Sistemi/
 | `/api/health` | GET | Sunucu durumu |
 | `/models/{dosya.stl}` | GET | STL dosyası servis et |
 
-**`/api/analyze` istek gövdesi:**
+**`/api/analyze` istek gövdesi (Simülasyon):**
 ```json
 {
   "model": "sedefe1.stl",
   "n_points": 8000,
   "noise_std": 0.30,
   "defect_count": 3
+}
+```
+
+**`/api/analyze-real` istek gövdesi (Gerçek Tarama):**
+```json
+{
+  "ref_model": "sedefe1.stl",
+  "scan_model": "lidarmesh1.stl",
+  "n_points": 8000
 }
 ```
 

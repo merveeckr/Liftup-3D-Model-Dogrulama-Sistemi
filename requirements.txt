@@ -5,3 +5,5 @@ numpy
 scipy
 scikit-learn
 python-multipart
+matplotlib
+openpyxl

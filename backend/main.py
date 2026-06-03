@@ -2,14 +2,14 @@ import os
 import sys
 from datetime import datetime
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from pydantic import BaseModel, Field
 import uvicorn
 
 sys.path.insert(0, os.path.dirname(__file__))
-from pipeline import run_pipeline
+from pipeline import run_pipeline, run_pipeline_real_scan
 from database import init_db, save_analysis, list_analyses, get_analysis, delete_analysis, clear_all
 from report import generate_pdf
 from export import generate_excel, generate_history_excel
@@ -40,6 +40,12 @@ class AnalysisRequest(BaseModel):
     seed: int = Field(default=None, description="Tekrarlanabilirlik için seed")
 
 
+class RealScanRequest(BaseModel):
+    ref_model: str = Field(..., description="Orijinal/ideal CAD STL dosyası adı")
+    scan_model: str = Field(..., description="Gerçek LiDAR tarama mesh STL dosyası adı")
+    n_points: int = Field(default=8000, ge=1000, le=30000)
+
+
 @app.get("/", include_in_schema=False)
 def serve_index():
     path = os.path.join(FRONTEND_DIR, "index.html")
@@ -53,6 +59,19 @@ def list_models():
     """Mevcut STL dosyalarını listele."""
     stl_files = [f for f in os.listdir(BASE_DIR) if f.lower().endswith(".stl")]
     return {"models": sorted(stl_files)}
+
+
+@app.post("/api/upload")
+async def upload_stl(file: UploadFile = File(...)):
+    """STL dosyası yükle ve proje dizinine kaydet."""
+    if not file.filename.lower().endswith(".stl"):
+        raise HTTPException(status_code=400, detail="Sadece .stl dosyaları kabul edilir")
+    safe_name = os.path.basename(file.filename)
+    dest = os.path.join(BASE_DIR, safe_name)
+    content = await file.read()
+    with open(dest, "wb") as f:
+        f.write(content)
+    return {"filename": safe_name, "size": len(content)}
 
 
 @app.get("/models/{filename}", include_in_schema=False)
@@ -84,6 +103,32 @@ def analyze(req: AnalysisRequest):
         seed=req.seed,
     )
     analysis_id = save_analysis(req.model, req.n_points, req.noise_std, req.defect_count, result)
+    result["analysis_id"] = analysis_id
+    return result
+
+
+@app.post("/api/analyze-real")
+def analyze_real(req: RealScanRequest):
+    """
+    Gerçek LiDAR tarama modu: simülasyon olmadan iki STL dosyasını karşılaştırır.
+    ref_model  → Orijinal/ideal CAD (referans)
+    scan_model → Gerçek tarama mesh'i (örn. lidarmesh1.stl)
+    """
+    ref_path  = os.path.join(BASE_DIR, req.ref_model)
+    scan_path = os.path.join(BASE_DIR, req.scan_model)
+
+    if not os.path.exists(ref_path):
+        raise HTTPException(status_code=404, detail=f"Referans model bulunamadı: {req.ref_model}")
+    if not os.path.exists(scan_path):
+        raise HTTPException(status_code=404, detail=f"Tarama modeli bulunamadı: {req.scan_model}")
+
+    result = run_pipeline_real_scan(
+        ref_stl_path=ref_path,
+        scan_stl_path=scan_path,
+        n_points=req.n_points,
+    )
+    label       = f"{req.ref_model} ← {req.scan_model}"
+    analysis_id = save_analysis(label, req.n_points, 0.0, 0, result)
     result["analysis_id"] = analysis_id
     return result
 

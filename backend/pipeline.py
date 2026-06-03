@@ -271,6 +271,124 @@ def _transform_point(T: np.ndarray, pt: list) -> list:
     return (T @ h)[:3].tolist()
 
 
+def run_pipeline_real_scan(
+    ref_stl_path: str,
+    scan_stl_path: str,
+    n_points: int = 8000,
+) -> dict:
+    """
+    Gerçek LiDAR tarama modu — simülasyon yok.
+    ref_stl_path  : Orijinal/ideal CAD (referans dikdörtgen kutu)
+    scan_stl_path : Gerçek tarama mesh'i (örn. lidarmesh1.stl)
+    """
+    ref_mesh  = load_mesh(ref_stl_path)
+    scan_mesh = load_mesh(scan_stl_path)
+
+    # Tarama mesh'ini nokta bulutuna dönüştür (uniform örnekleme)
+    scan_pcd = scan_mesh.sample_points_uniformly(n_points, use_triangle_normal=True)
+
+    icp_rmse, T = icp_align(scan_pcd, ref_mesh)
+
+    distances, deviation_method = compute_deviation(scan_pcd, ref_mesh)
+
+    scan_pts = np.asarray(scan_pcd.points)
+
+    # LiDAR hassasiyeti için tipik gürültü tahmini
+    noise_std_est = 0.3
+    anomalies, n_clusters = detect_anomalies(scan_pts, distances, noise_std_est)
+    colors = distances_to_colors(distances)
+
+    # Anomali noktalarını DBSCAN ile kümelere ayırarak defekt bölgesi oluştur
+    defect_regions = []
+    if np.any(anomalies):
+        anom_pts   = scan_pts[anomalies]
+        anom_dists = distances[anomalies]
+
+        bbox_diag = float(np.linalg.norm(scan_pts.max(axis=0) - scan_pts.min(axis=0)))
+        eps = max(bbox_diag * 0.03, 2.0)
+
+        db     = DBSCAN(eps=eps, min_samples=5, n_jobs=-1).fit(anom_pts)
+        labels = db.labels_
+
+        for cid in sorted(set(labels[labels >= 0])):
+            mask         = labels == cid
+            cluster_pts  = anom_pts[mask]
+            cluster_dist = anom_dists[mask]
+
+            center    = cluster_pts.mean(axis=0)
+            radius    = float(np.linalg.norm(cluster_pts - center, axis=1).max())
+            magnitude = float(cluster_dist.mean())
+            dtype     = 'bump' if magnitude > 1.0 else 'hole'
+
+            defect = {
+                'center':    center.tolist(),
+                'radius':    radius,
+                'magnitude': magnitude,
+                'type':      dtype,
+            }
+            defect['risk'] = calculate_risk(defect)
+            defect_regions.append(defect)
+
+    _CONF_PENALTY = {'low': 4, 'medium': 9, 'high': 15, 'critical': 25}
+    penalty = sum(_CONF_PENALTY.get(d['risk']['level'], 9) for d in defect_regions)
+
+    tolerance        = 0.5
+    base_conformance = float(np.sum(distances < tolerance) / len(distances) * 100)
+    conformance      = float(max(0.0, min(100.0, base_conformance - penalty)))
+
+    if defect_regions:
+        max_score    = max(d['risk']['score'] for d in defect_regions)
+        overall_risk = {v: k for k, v in _RISK_SCORE.items()}[max_score]
+    else:
+        overall_risk = 'low'
+
+    if conformance >= 90 and overall_risk not in ('critical', 'high'):
+        verdict = 'accept'
+    elif conformance >= 65:
+        verdict = 'conditional'
+    else:
+        verdict = 'reject'
+
+    point_defect_types = [None] * len(scan_pts)
+    for defect in defect_regions:
+        c  = np.array(defect['center'])
+        r  = defect['radius']
+        d2 = np.linalg.norm(scan_pts - c, axis=1)
+        for i in np.where(d2 < r)[0]:
+            if point_defect_types[i] is None:
+                point_defect_types[i] = defect['type']
+
+    rms       = float(np.sqrt(np.mean(distances ** 2)))
+    hausdorff = float(np.max(distances))
+    mean_dev  = float(np.mean(distances))
+
+    return {
+        "points":             scan_pts.tolist(),
+        "colors":             colors.tolist(),
+        "distances":          distances.tolist(),
+        "anomalies":          anomalies.tolist(),
+        "point_defect_types": point_defect_types,
+        "defect_regions":     defect_regions,
+        "mode":               "real_scan",
+        "stats": {
+            "rms":              round(rms, 4),
+            "max_deviation":    round(hausdorff, 4),
+            "mean_deviation":   round(mean_dev, 4),
+            "icp_rmse":         round(icp_rmse, 4),
+            "anomaly_count":    int(np.sum(anomalies)),
+            "anomaly_clusters": n_clusters,
+            "total_points":     int(len(scan_pts)),
+            "defect_count":     len(defect_regions),
+            "conformance":      round(conformance, 2),
+            "tolerance_mm":     round(tolerance, 3),
+            "overall_risk":     overall_risk,
+            "verdict":          verdict,
+            "icp_method":       "point-to-plane (coarse+fine)",
+            "deviation_method": deviation_method,
+        },
+    }
+
+
 def run_pipeline(
     stl_path: str,
     n_points: int = 8000,
