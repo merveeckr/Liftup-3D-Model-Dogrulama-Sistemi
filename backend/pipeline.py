@@ -37,6 +37,13 @@ def calculate_risk(defect: dict) -> dict:
 def load_mesh(stl_path: str) -> o3d.geometry.TriangleMesh:
     mesh = o3d.io.read_triangle_mesh(stl_path)
     mesh.compute_vertex_normals()
+    # Otomatik birim tespiti: bounding box köşegeni < 1 ise koordinatlar
+    # metre cinsinden export edilmiş demektir → 1000x büyüterek mm'ye çevir
+    verts = np.asarray(mesh.vertices)
+    diag = np.linalg.norm(verts.max(axis=0) - verts.min(axis=0))
+    if diag < 1.0 and diag > 1e-9:
+        mesh.vertices = o3d.utility.Vector3dVector(verts * 1000.0)
+        mesh.compute_vertex_normals()
     return mesh
 
 
@@ -76,14 +83,17 @@ def simulate_scan(
     defect_types   = ['bump', 'hole', 'missing']
     defect_regions = []
 
+    # Model boyutuna orantılı defekt yarıçapı — herhangi bir ölçekte çalışır
+    bbox_diag = float(np.linalg.norm(pts.max(axis=0) - pts.min(axis=0)))
+    r_min = bbox_diag * 0.03   # bbox köşegeninin %3'ü
+    r_max = bbox_diag * 0.08   # bbox köşegeninin %8'i
+
     for i in range(defect_count):
         dtype = defect_types[i % len(defect_types)]
 
         center_idx = np.random.randint(0, len(pts_original))
-        # Merkezi orijinal mesh yüzeyinden seç, önceki defektlerin
-        # dışarı ittiği noktalardan değil
         center = pts_original[center_idx].copy()
-        radius = np.random.uniform(3.0, 8.0)
+        radius = np.random.uniform(r_min, r_max)
         dists  = np.linalg.norm(pts_original - center, axis=1)
         mask   = (dists < radius) & keep
 
@@ -126,10 +136,35 @@ def icp_align(
     ref_mesh: o3d.geometry.TriangleMesh,
 ) -> tuple:
     """
-    İki aşamalı ICP:
+    Centroid ön hizalaması + iki aşamalı ICP:
+    0. Centroid hizalaması — iki modeli ortak merkeze taşı
     1. Kaba hizalama — Point-to-point, geniş tolerans
     2. İnce hizalama — Point-to-plane, dar tolerans (daha doğru)
     """
+    # ── Ölçek normalizasyonu ───────────────────────────────────────
+    # Eğer iki model farklı birimde/ölçekte ise (örn. biri mm biri m)
+    # ICP hiç hizalayamaz. Bounding box köşegenleri eşitlenerek
+    # scan, referansın ölçeğine getirilir.
+    ref_pts_arr  = np.asarray(ref_mesh.vertices)
+    scan_pts_arr = np.asarray(scan_pcd.points)
+    ref_diag  = np.linalg.norm(ref_pts_arr.max(axis=0)  - ref_pts_arr.min(axis=0))
+    scan_diag = np.linalg.norm(scan_pts_arr.max(axis=0) - scan_pts_arr.min(axis=0))
+    scale_factor = 1.0
+    if ref_diag > 1e-6 and scan_diag > 1e-6:
+        ratio = ref_diag / scan_diag
+        if ratio > 1.5 or ratio < 0.667:   # %50'den fazla fark varsa ölçekle
+            scale_factor = ratio
+            scan_pcd.points = o3d.utility.Vector3dVector(scan_pts_arr * scale_factor)
+
+    # ── Centroid ön hizalaması ─────────────────────────────────────
+    # ICP'nin 20 mm toleransla başlayabilmesi için scan'ı referansın
+    # merkezine yakın bir konuma taşı.
+    ref_center  = np.asarray(ref_mesh.vertices).mean(axis=0)
+    scan_center = np.asarray(scan_pcd.points).mean(axis=0)
+    T_pre = np.eye(4)
+    T_pre[:3, 3] = ref_center - scan_center
+    scan_pcd.transform(T_pre)
+
     # ── Kaba hizalama ──────────────────────────────────────────────
     ref_coarse = ref_mesh.sample_points_poisson_disk(10000)
     result_coarse = o3d.pipelines.registration.registration_icp(
@@ -158,7 +193,10 @@ def icp_align(
     )
 
     scan_pcd.transform(result_fine.transformation)
-    return float(result_fine.inlier_rmse), result_fine.transformation
+    # Tam dönüşüm: ince ICP ∘ kaba pre-align (simülasyon modunda defect
+    # merkezlerini dönüştürmek için gerekli)
+    T_combined = result_fine.transformation @ T_pre
+    return float(result_fine.inlier_rmse), T_combined
 
 
 def compute_deviation(
@@ -194,6 +232,7 @@ def detect_anomalies(
     distances: np.ndarray,
     noise_std: float,
     defect_count: int = 0,
+    contamination: float = None,
 ) -> tuple:
     """
     Üç katmanlı anomali tespiti:
@@ -204,9 +243,9 @@ def detect_anomalies(
     threshold         = noise_std * 3 + 0.5
     threshold_anomaly = distances > threshold
 
-    # Contamination: defekt sayısına göre adaptif.
-    # 0 defekt → çok küçük (yanlış pozitif engeli); arttıkça büyür.
-    contamination = float(np.clip(defect_count * 0.015 + 0.005, 0.005, 0.15))
+    if contamination is None:
+        # Simülasyon modu: defekt sayısına göre adaptif
+        contamination = float(np.clip(defect_count * 0.015 + 0.005, 0.005, 0.15))
 
     features = np.column_stack([scan_pts, distances])
     clf = IsolationForest(
@@ -293,9 +332,14 @@ def run_pipeline_real_scan(
 
     scan_pts = np.asarray(scan_pcd.points)
 
-    # LiDAR hassasiyeti için tipik gürültü tahmini
-    noise_std_est = 0.3
-    anomalies, n_clusters = detect_anomalies(scan_pts, distances, noise_std_est)
+    # Mesh-to-mesh karşılaştırma: sensör gürültüsü yok → eşik = 0.5 mm (tolerans)
+    # Contamination: tolerans dışındaki nokta oranından adaptif hesapla
+    noise_std_est = 0.0
+    frac_above = float(np.sum(distances > 0.5) / len(distances))
+    adaptive_contamination = float(np.clip(frac_above, 0.01, 0.40))
+    anomalies, n_clusters = detect_anomalies(
+        scan_pts, distances, noise_std_est, contamination=adaptive_contamination
+    )
     colors = distances_to_colors(distances)
 
     # Anomali noktalarını DBSCAN ile kümelere ayırarak defekt bölgesi oluştur
