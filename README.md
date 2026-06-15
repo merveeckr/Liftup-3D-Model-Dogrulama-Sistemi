@@ -17,8 +17,8 @@ Gerçek sensör donanımı olmadan da çalışır: sistem, referans STL dosyası
 
 | İsim | Rol |
 |------|-----|
-| Necla Zencirci | Proje Yürütücüsü |
-| Sedef Sarı | 3D Model & CAD |
+| Necla Zencirci |  Sistem Entegrasyonu ve Test​,Proje yürütücüsü |
+| Sedef Sarı | Donanım Geliştirme ve 3D Modelleme​|
 | Merve Çakır | Yazılım Geliştirme |
 | Hatice Süheyla Eser | Algoritma & Test |
 
@@ -319,4 +319,3 @@ Liftup-3D-Model-Dogrulama-Sistemi-main/
 
 ---
 
-*LIFT UP Projesi — Ankara Yıldırım Beyazıt Üniversitesi EEE × TUSAŞ*
